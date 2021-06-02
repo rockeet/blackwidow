@@ -1226,7 +1226,6 @@ class BlackWidow {
   RedisSets* sets_db_;
   RedisZSets* zsets_db_;
   RedisLists* lists_db_;
-  std::atomic<bool> is_opened_;
 
   LRUCache<std::string, std::string>* cursors_store_;
 
@@ -1238,6 +1237,7 @@ class BlackWidow {
 
   std::atomic<int> current_task_type_;
   std::atomic<bool> bg_tasks_should_exit_;
+  std::atomic<bool> is_opened_;
 
   // For scan keys in data base
   std::atomic<bool> scan_keynum_exit_;

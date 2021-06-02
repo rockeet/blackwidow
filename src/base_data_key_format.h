@@ -45,11 +45,11 @@ class BaseDataKey {
   }
 
  private:
-  char space_[200];
   char* start_;
   Slice key_;
-  int32_t version_;
   Slice data_;
+  int32_t version_;
+  char space_[124];
 };
 
 class ParsedBaseDataKey {

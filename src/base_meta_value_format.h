@@ -136,12 +136,12 @@ class ParsedBaseMetaValue : public ParsedInternalValue {
   int32_t count_;
 };
 
-typedef BaseMetaValue HashesMetaValue;
+typedef       BaseMetaValue       HashesMetaValue;
 typedef ParsedBaseMetaValue ParsedHashesMetaValue;
-typedef BaseMetaValue SetsMetaValue;
-typedef ParsedBaseMetaValue ParsedSetsMetaValue;
-typedef BaseMetaValue ZSetsMetaValue;
-typedef ParsedBaseMetaValue ParsedZSetsMetaValue;
+typedef       BaseMetaValue         SetsMetaValue;
+typedef ParsedBaseMetaValue   ParsedSetsMetaValue;
+typedef       BaseMetaValue        ZSetsMetaValue;
+typedef ParsedBaseMetaValue  ParsedZSetsMetaValue;
 
 }  //  namespace blackwidow
 #endif  // SRC_BASE_META_VALUE_FORMAT_H_
