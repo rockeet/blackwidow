@@ -10,7 +10,7 @@ namespace blackwidow {
 class BaseDataKey {
  public:
   BaseDataKey(const Slice& key, int32_t version, const Slice& data) :
-    start_(nullptr), key_(key), version_(version), data_(data) {}
+    start_(nullptr), key_(key), data_(data), version_(version) {}
 
   ~BaseDataKey() {
     if (start_ != space_) {

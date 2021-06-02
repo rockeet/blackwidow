@@ -18,15 +18,17 @@
 #include <inttypes.h>
 
 #include "rocksdb/db.h"
-#include "util/file_util.h"
+#include "file/file_util.h"
 
 #if (ROCKSDB_MAJOR < 5 || (ROCKSDB_MAJOR == 5 && ROCKSDB_MINOR < 3))
 #include "db/filename.h"
 #else
-#include "util/filename.h"
+#include "file/filename.h"
 #endif
 
 namespace rocksdb {
+
+using std::unique_ptr;
 
 class DBCheckpointImpl : public DBCheckpoint {
  public:
@@ -177,11 +179,11 @@ Status DBCheckpointImpl::CreateCheckpointWithFiles(
     if ((type != kTableFile) || (!same_fs)) {
       Log(db_->GetOptions().info_log, "Copying %s", src_fname.c_str());
 #if (ROCKSDB_MAJOR < 5 || (ROCKSDB_MAJOR == 5 && ROCKSDB_MINOR < 3))
-      s = CopyFile(db_->GetEnv(), db_->GetName() + src_fname,
+      s = CopyFile(db_->GetFileSystem(), db_->GetName() + src_fname,
                    full_private_path + src_fname,
                    (type == kDescriptorFile) ? manifest_file_size : 0);
 #else
-      s = CopyFile(db_->GetEnv(), db_->GetName() + src_fname,
+      s = CopyFile(db_->GetFileSystem(), db_->GetName() + src_fname,
                    full_private_path + src_fname,
                    (type == kDescriptorFile) ? manifest_file_size : 0, false);
 #endif
@@ -190,10 +192,10 @@ Status DBCheckpointImpl::CreateCheckpointWithFiles(
   if (s.ok() && !current_fname.empty() && !manifest_fname.empty()) {
 // 5.17.2 Createfile with new argv use_fsync
 #if (ROCKSDB_MAJOR < 5 || (ROCKSDB_MAJOR == 5 && ROCKSDB_MINOR < 17))
-    s = CreateFile(db_->GetEnv(), full_private_path + current_fname,
+    s = CreateFile(db_->GetFileSystem(), full_private_path + current_fname,
                    manifest_fname.substr(1) + "\n");
 #else
-    s = CreateFile(db_->GetEnv(), full_private_path + current_fname,
+    s = CreateFile(db_->GetFileSystem(), full_private_path + current_fname,
                    manifest_fname.substr(1) + "\n", false);
 #endif
   }
@@ -209,12 +211,12 @@ Status DBCheckpointImpl::CreateCheckpointWithFiles(
         Log(db_->GetOptions().info_log, "Copying %s",
             live_wal_files[i]->PathName().c_str());
 #if (ROCKSDB_MAJOR < 5 || (ROCKSDB_MAJOR == 5 && ROCKSDB_MINOR < 3))
-        s = CopyFile(db_->GetEnv(),
+        s = CopyFile(db_->GetFileSystem(),
                      db_->GetOptions().wal_dir + live_wal_files[i]->PathName(),
                      full_private_path + live_wal_files[i]->PathName(),
                      live_wal_files[i]->SizeFileBytes());
 #else
-        s = CopyFile(db_->GetEnv(),
+        s = CopyFile(db_->GetFileSystem(),
                      db_->GetOptions().wal_dir + live_wal_files[i]->PathName(),
                      full_private_path + live_wal_files[i]->PathName(),
                      live_wal_files[i]->SizeFileBytes(), false);
@@ -237,11 +239,11 @@ Status DBCheckpointImpl::CreateCheckpointWithFiles(
         Log(db_->GetOptions().info_log, "Copying %s",
             live_wal_files[i]->PathName().c_str());
 #if (ROCKSDB_MAJOR < 5 || (ROCKSDB_MAJOR == 5 && ROCKSDB_MINOR < 3))
-        s = CopyFile(db_->GetEnv(),
+        s = CopyFile(db_->GetFileSystem(),
                      db_->GetOptions().wal_dir + live_wal_files[i]->PathName(),
                      full_private_path + live_wal_files[i]->PathName(), 0);
 #else
-        s = CopyFile(db_->GetEnv(),
+        s = CopyFile(db_->GetFileSystem(),
                      db_->GetOptions().wal_dir + live_wal_files[i]->PathName(),
                      full_private_path + live_wal_files[i]->PathName(),
                      0, false);
