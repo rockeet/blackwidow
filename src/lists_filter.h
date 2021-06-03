@@ -145,6 +145,7 @@ class ListsDataFilter : public rocksdb::CompactionFilter {
 
 class ListsDataFilterFactory : public rocksdb::CompactionFilterFactory {
  public:
+  ListsDataFilterFactory() : ListsDataFilterFactory(nullptr, nullptr) {}
   ListsDataFilterFactory(rocksdb::DB** db_ptr,
                          std::vector<rocksdb::ColumnFamilyHandle*>* handles_ptr)
     : db_ptr_(db_ptr), cf_handles_ptr_(handles_ptr) {}
@@ -158,7 +159,7 @@ class ListsDataFilterFactory : public rocksdb::CompactionFilterFactory {
     return "ListsDataFilterFactory";
   }
 
- private:
+ protected:
   rocksdb::DB** db_ptr_;
   std::vector<rocksdb::ColumnFamilyHandle*>* cf_handles_ptr_;
 };

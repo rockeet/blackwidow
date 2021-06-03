@@ -34,6 +34,9 @@ class Redis {
 
   Status SetOptions(const OptionType& option_type, const std::unordered_map<std::string, std::string>& options);
 
+  Status OpenByRepo(const BlackwidowOptions& bw_options,
+                    const std::string& db_path, const std::string& type);
+
   // Common Commands
   virtual Status Open(const BlackwidowOptions& bw_options,
                       const std::string& db_path) = 0;

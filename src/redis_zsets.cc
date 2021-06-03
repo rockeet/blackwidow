@@ -18,7 +18,7 @@
 
 namespace blackwidow {
 
-rocksdb::Comparator* ZSetsScoreKeyComparator() {
+const rocksdb::Comparator* ZSetsScoreKeyComparator() {
   static ZSetsScoreKeyComparatorImpl zsets_score_key_compare;
   return &zsets_score_key_compare;
 }
@@ -31,6 +31,9 @@ Status RedisZSets::Open(const BlackwidowOptions& bw_options,
                         const std::string& db_path) {
   statistics_store_->SetCapacity(bw_options.statistics_max_size);
   small_compaction_threshold_ = bw_options.small_compaction_threshold;
+  if (!bw_options.json_file.empty()) {
+    return OpenByRepo(bw_options, db_path, "zsets");
+  }
 
   rocksdb::Options ops(bw_options.options);
   Status s = rocksdb::DB::Open(ops, db_path, &db_);

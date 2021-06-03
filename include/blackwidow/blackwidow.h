@@ -6,6 +6,7 @@
 #ifndef INCLUDE_BLACKWIDOW_BLACKWIDOW_H_
 #define INCLUDE_BLACKWIDOW_BLACKWIDOW_H_
 
+#include <memory>
 #include <string>
 #include <map>
 #include <list>
@@ -22,7 +23,13 @@
 
 #include "slash/include/slash_mutex.h"
 
+namespace rocksdb {
+  class JsonPluginRepo;
+}
+
 namespace blackwidow {
+
+using rocksdb::JsonPluginRepo;
 
 const double ZSET_SCORE_MAX = std::numeric_limits<double>::max();
 const double ZSET_SCORE_MIN = std::numeric_limits<double>::lowest();
@@ -60,6 +67,7 @@ template <typename T1, typename T2>
 class LRUCache;
 
 struct BlackwidowOptions {
+  std::string json_file;
   rocksdb::Options options;
   rocksdb::BlockBasedTableOptions table_options;
   size_t block_cache_size;
@@ -1220,7 +1228,10 @@ class BlackWidow {
   Status SetOptions(const OptionType& option_type, const std::string& db_type,
                     const std::unordered_map<std::string, std::string>& options);
 
+  JsonPluginRepo* GetRepo() { return repo_.get(); }
  private:
+  std::string json_file_;
+  std::shared_ptr<JsonPluginRepo> repo_;
   RedisStrings* strings_db_;
   RedisHashes* hashes_db_;
   RedisSets* sets_db_;

@@ -15,6 +15,7 @@
 #include "src/redis_zsets.h"
 #include "src/redis_hyperloglog.h"
 #include "src/lru_cache.h"
+#include "utilities/json/json_plugin_repo.h"
 
 namespace blackwidow {
 
@@ -83,6 +84,11 @@ BlackWidow::~BlackWidow() {
     fprintf(stderr, "pthread_join failed with bgtask thread error %d\n", ret);
   }
 
+  if (!json_file_.empty()) {
+    repo_->CloseAllDB();
+    return;
+  }
+
   delete strings_db_;
   delete hashes_db_;
   delete sets_db_;
@@ -103,6 +109,9 @@ static std::string AppendSubDirectory(const std::string& db_path,
 Status BlackWidow::Open(const BlackwidowOptions& bw_options,
                         const std::string& db_path) {
   mkpath(db_path.c_str(), 0755);
+  repo_ = std::make_shared<rocksdb::JsonPluginRepo>();
+  repo_->ImportJsonFile(bw_options.json_file);
+  json_file_ = bw_options.json_file;
 
   strings_db_ = new RedisStrings(this, kStrings);
   Status s = strings_db_->Open(

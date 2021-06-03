@@ -99,6 +99,7 @@ class ZSetsScoreFilter : public rocksdb::CompactionFilter {
 
 class ZSetsScoreFilterFactory : public rocksdb::CompactionFilterFactory {
  public:
+  ZSetsScoreFilterFactory() : ZSetsScoreFilterFactory(nullptr, nullptr) {}
   ZSetsScoreFilterFactory(rocksdb::DB** db_ptr,
       std::vector<rocksdb::ColumnFamilyHandle*>* handles_ptr)
     : db_ptr_(db_ptr), cf_handles_ptr_(handles_ptr) {}
@@ -113,7 +114,7 @@ class ZSetsScoreFilterFactory : public rocksdb::CompactionFilterFactory {
     return "ZSetsScoreFilterFactory";
   }
 
- private:
+ protected:
   rocksdb::DB** db_ptr_;
   std::vector<rocksdb::ColumnFamilyHandle*>* cf_handles_ptr_;
 };

@@ -4,6 +4,7 @@
 //  of patent rights can be found in the PATENTS file in the same directory.
 
 #include "src/redis.h"
+#include "utilities/json/json_plugin_repo.h"
 
 namespace blackwidow {
 
@@ -31,6 +32,21 @@ Redis::~Redis() {
   delete lock_mgr_;
   delete statistics_store_;
   delete scan_cursors_store_;
+}
+
+Status Redis::OpenByRepo(const BlackwidowOptions& bw_options,
+                         const std::string& db_path, const std::string& type) {
+  ROCKSDB_VERIFY(!bw_options.json_file.empty());
+  ROCKSDB_VERIFY(bw_->GetRepo() != nullptr);
+  rocksdb::DB_MultiCF* dbm = nullptr;
+  Status s = bw_->GetRepo()->OpenDB(type, &dbm);
+  if (s.ok()) {
+    db_ = dbm->db;
+    handles_ = dbm->cf_handles;
+    ROCKSDB_VERIFY_F(db_path == db_->GetName(), "type = %s : %s != %s",
+       type.c_str(), db_path.c_str(), db_->GetName().c_str());
+  }
+  return s;
 }
 
 Status Redis::GetScanStartPoint(const Slice& key,
