@@ -109,10 +109,16 @@ static std::string AppendSubDirectory(const std::string& db_path,
 Status BlackWidow::Open(const BlackwidowOptions& bw_options,
                         const std::string& db_path) {
   mkpath(db_path.c_str(), 0755);
-  repo_ = std::make_shared<rocksdb::JsonPluginRepo>();
-  repo_->ImportJsonFile(bw_options.json_file);
-  json_file_ = bw_options.json_file;
-
+  if (!bw_options.json_file.empty()) {
+    repo_ = std::make_shared<rocksdb::JsonPluginRepo>();
+    Status s = repo_->ImportJsonFile(bw_options.json_file);
+    if (!s.ok()) {
+      fprintf(stderr,
+          "[FATAL] ImportJsonFile failed: %s\n", s.ToString().c_str());
+      exit(-1);
+    }
+    json_file_ = bw_options.json_file;
+  }
   strings_db_ = new RedisStrings(this, kStrings);
   Status s = strings_db_->Open(
       bw_options, AppendSubDirectory(db_path, "strings"));
@@ -154,6 +160,14 @@ Status BlackWidow::Open(const BlackwidowOptions& bw_options,
     exit(-1);
   }
   is_opened_.store(true);
+  if (!bw_options.json_file.empty()) {
+    s = repo_->StartHttpServer();
+    if (!s.ok()) {
+      fprintf(stderr,
+          "[FATAL] StartHttpServer failed, %s\n", s.ToString().c_str());
+      exit(-1);
+    }
+  }
   return Status::OK();
 }
 

@@ -7,6 +7,7 @@
 #include "lists_filter.h"
 #include "zsets_filter.h"
 #include "strings_filter.h"
+#include <mutex>
 
 #undef Debug
 #undef Trace
@@ -23,12 +24,26 @@ ROCKSDB_REG_DEFAULT_CONS( StringsFilterFactory, CompactionFilterFactory);
 
 template<class Base>
 struct Tpl_FilterFactoryJS : public Base {
+  std::string m_type;
+  std::mutex m_mtx;
+  const JsonPluginRepo* m_repo;
   Tpl_FilterFactoryJS(const json& js, const JsonPluginRepo& repo) {
-    std::string type = js["type"];
-    DB_MultiCF* dbm = repo[type];
-    ROCKSDB_VERIFY_F(nullptr != dbm, "type = %s", type.c_str());
-    this->db_ptr_ = &dbm->db;
-    this->cf_handles_ptr_ = &dbm->cf_handles;
+    m_repo = &repo;
+    m_type = js["type"];
+  }
+  virtual std::unique_ptr<rocksdb::CompactionFilter>
+  CreateCompactionFilter(const rocksdb::CompactionFilter::Context& context)
+  final {
+    {
+      std::lock_guard<std::mutex> lock(m_mtx);
+      if (!this->db_ptr_) {
+        DB_MultiCF* dbm = (*m_repo)[m_type];
+        ROCKSDB_VERIFY_F(nullptr != dbm, "type = %s", m_type.c_str());
+        this->db_ptr_ = &dbm->db;
+        this->cf_handles_ptr_ = &dbm->cf_handles;
+      }
+    }
+    return Base::CreateCompactionFilter(context);
   }
 };
 using   BaseDataFilterFactoryJS = Tpl_FilterFactoryJS<  BaseDataFilterFactory>;
