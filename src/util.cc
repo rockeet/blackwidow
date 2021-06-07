@@ -396,7 +396,7 @@ int mkpath(const char *path, mode_t mode) {
 }
 
 int delete_dir(const char* dirname) {
-    char chBuf[256];
+    char chBuf[512];
     DIR * dir = NULL;
     struct dirent *ptr;
     int ret = 0;
@@ -413,7 +413,7 @@ int delete_dir(const char* dirname) {
         if (0 == ret) {
             continue;
         }
-        snprintf(chBuf, sizeof(256), "%s/%s", dirname, ptr->d_name);
+        snprintf(chBuf, sizeof(chBuf), "%s/%s", dirname, ptr->d_name);
         ret = is_dir(chBuf);
         if (0 == ret) {
             // is dir

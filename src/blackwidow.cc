@@ -51,10 +51,10 @@ BlackWidow::BlackWidow() :
   sets_db_(nullptr),
   zsets_db_(nullptr),
   lists_db_(nullptr),
-  is_opened_(false),
   bg_tasks_cond_var_(&bg_tasks_mutex_),
   current_task_type_(kNone),
   bg_tasks_should_exit_(false),
+  is_opened_(false),
   scan_keynum_exit_(false) {
   cursors_store_ = new LRUCache<std::string, std::string>();
   cursors_store_->SetCapacity(5000);
@@ -1063,6 +1063,7 @@ int64_t BlackWidow::Scan(const DataType& dtype, int64_t cursor,
         }
       }
       start_key = prefix;
+      break;
     case 'h':
       is_finish = hashes_db_->Scan(start_key, pattern,
                                    keys, &leftover_visits, &next_key);
@@ -1081,6 +1082,7 @@ int64_t BlackWidow::Scan(const DataType& dtype, int64_t cursor,
         }
       }
       start_key = prefix;
+      break;
     case 's':
       is_finish = sets_db_->Scan(start_key, pattern,
                                  keys, &leftover_visits, &next_key);
@@ -1099,6 +1101,7 @@ int64_t BlackWidow::Scan(const DataType& dtype, int64_t cursor,
         }
       }
       start_key = prefix;
+      break;
     case 'l':
       is_finish = lists_db_->Scan(start_key, pattern,
                                   keys, &leftover_visits, &next_key);
@@ -1117,6 +1120,7 @@ int64_t BlackWidow::Scan(const DataType& dtype, int64_t cursor,
         }
       }
       start_key = prefix;
+      break;
     case 'z':
       is_finish = zsets_db_->Scan(start_key, pattern,
                                   keys, &leftover_visits, &next_key);
@@ -1128,6 +1132,7 @@ int64_t BlackWidow::Scan(const DataType& dtype, int64_t cursor,
         cursor_ret = 0;
         break;
       }
+      break;
   }
   return cursor_ret;
 }
@@ -1177,6 +1182,7 @@ int64_t BlackWidow::PKExpireScan(const DataType& dtype, int64_t cursor,
         }
       }
       start_key = "";
+      break;
     case 'h':
       is_finish = hashes_db_->PKExpireScan(start_key, curtime + min_ttl,
               curtime + max_ttl, keys, &leftover_visits, &next_key);
@@ -1195,6 +1201,7 @@ int64_t BlackWidow::PKExpireScan(const DataType& dtype, int64_t cursor,
         }
       }
       start_key = "";
+      break;
     case 's':
       is_finish = sets_db_->PKExpireScan(start_key, curtime + min_ttl,
               curtime + max_ttl, keys, &leftover_visits, &next_key);
@@ -1213,6 +1220,7 @@ int64_t BlackWidow::PKExpireScan(const DataType& dtype, int64_t cursor,
         }
       }
       start_key = "";
+      break;
     case 'l':
       is_finish = lists_db_->PKExpireScan(start_key, curtime + min_ttl,
               curtime + max_ttl, keys, &leftover_visits, &next_key);
@@ -1231,6 +1239,7 @@ int64_t BlackWidow::PKExpireScan(const DataType& dtype, int64_t cursor,
         }
       }
       start_key = "";
+      break;
     case 'z':
       is_finish = zsets_db_->PKExpireScan(start_key, curtime + min_ttl,
               curtime + max_ttl, keys, &leftover_visits, &next_key);
@@ -1242,6 +1251,7 @@ int64_t BlackWidow::PKExpireScan(const DataType& dtype, int64_t cursor,
         cursor_ret = 0;
         break;
       }
+      break;
   }
   return cursor_ret;
 }
