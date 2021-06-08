@@ -143,6 +143,10 @@ class ParsedInternalValue {
   int32_t timestamp_;
 };
 
+struct VersionTimestamp {
+  int32_t version;
+  int32_t timestamp;
+};
 
 }  //  namespace blackwidow
 #endif  // SRC_BASE_VALUE_FORMAT_H_

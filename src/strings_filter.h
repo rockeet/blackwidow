@@ -21,8 +21,6 @@ class StringsFilter : public rocksdb::CompactionFilter {
   bool Filter(int level, const rocksdb::Slice& key,
               const rocksdb::Slice& value,
               std::string* new_value, bool* value_changed) const override {
-    int64_t unix_time;
-    rocksdb::Env::Default()->GetCurrentTime(&unix_time);
     int32_t cur_time = static_cast<int32_t>(unix_time);
     ParsedStringsValue parsed_strings_value(value);
     Trace("==========================START==========================");
@@ -41,6 +39,7 @@ class StringsFilter : public rocksdb::CompactionFilter {
       return false;
     }
   }
+  int64_t unix_time;
 
   const char* Name() const override { return "StringsFilter"; }
 };
@@ -49,12 +48,11 @@ class StringsFilterFactory : public rocksdb::CompactionFilterFactory {
  public:
   StringsFilterFactory() = default;
   std::unique_ptr<rocksdb::CompactionFilter> CreateCompactionFilter(
-    const rocksdb::CompactionFilter::Context& context) override {
-    return std::unique_ptr<rocksdb::CompactionFilter>(new StringsFilter());
-  }
+    const rocksdb::CompactionFilter::Context& context) override;
   const char* Name() const override {
     return "StringsFilterFactory";
   }
+  mutable uint64_t unix_time_ = 0; // only used by compact worker
 };
 
 }  //  namespace blackwidow

@@ -9,6 +9,7 @@
 #include <string>
 #include <memory>
 #include <vector>
+#include <terark/hash_strmap.hpp>
 
 #include "src/debug.h"
 #include "src/lists_meta_value_format.h"
@@ -23,8 +24,6 @@ class ListsMetaFilter : public rocksdb::CompactionFilter {
   bool Filter(int level, const rocksdb::Slice& key,
               const rocksdb::Slice& value,
               std::string* new_value, bool* value_changed) const override {
-    int64_t unix_time;
-    rocksdb::Env::Default()->GetCurrentTime(&unix_time);
     int32_t cur_time = static_cast<int32_t>(unix_time);
     ParsedListsMetaValue parsed_lists_meta_value(value);
     Trace("==========================START==========================");
@@ -49,6 +48,7 @@ class ListsMetaFilter : public rocksdb::CompactionFilter {
     Trace("Reserve");
     return false;
   }
+  int64_t unix_time;
 
   const char* Name() const override { return "ListsMetaFilter"; }
 };
@@ -57,12 +57,11 @@ class ListsMetaFilterFactory : public rocksdb::CompactionFilterFactory {
  public:
   ListsMetaFilterFactory() = default;
   std::unique_ptr<rocksdb::CompactionFilter> CreateCompactionFilter(
-    const rocksdb::CompactionFilter::Context& context) override {
-    return std::unique_ptr<rocksdb::CompactionFilter>(new ListsMetaFilter());
-  }
+    const rocksdb::CompactionFilter::Context& context) override;
   const char* Name() const override {
     return "ListsMetaFilterFactory";
   }
+  int64_t unix_time_;
 };
 
 class ListsDataFilter : public rocksdb::CompactionFilter {
@@ -114,8 +113,6 @@ class ListsDataFilter : public rocksdb::CompactionFilter {
       return true;
     }
 
-    int64_t unix_time;
-    rocksdb::Env::Default()->GetCurrentTime(&unix_time);
     if (cur_meta_timestamp_ != 0
       && cur_meta_timestamp_ < static_cast<int32_t>(unix_time)) {
       Trace("Drop[Timeout]");
@@ -130,10 +127,10 @@ class ListsDataFilter : public rocksdb::CompactionFilter {
       return false;
     }
   }
+  int64_t unix_time;
 
   const char* Name() const override { return "ListsDataFilter"; }
 
- private:
   rocksdb::DB* db_;
   std::vector<rocksdb::ColumnFamilyHandle*>* cf_handles_ptr_;
   rocksdb::ReadOptions default_read_options_;
@@ -151,17 +148,15 @@ class ListsDataFilterFactory : public rocksdb::CompactionFilterFactory {
     : db_ptr_(db_ptr), cf_handles_ptr_(handles_ptr) {}
 
   std::unique_ptr<rocksdb::CompactionFilter> CreateCompactionFilter(
-      const rocksdb::CompactionFilter::Context& context) override {
-    return std::unique_ptr<rocksdb::CompactionFilter>(
-      new ListsDataFilter(*db_ptr_, cf_handles_ptr_));
-  }
+      const rocksdb::CompactionFilter::Context& context) override;
   const char* Name() const override {
     return "ListsDataFilterFactory";
   }
 
- protected:
   rocksdb::DB** db_ptr_;
   std::vector<rocksdb::ColumnFamilyHandle*>* cf_handles_ptr_;
+  int64_t unix_time_;
+  terark::hash_strmap<VersionTimestamp> ttlmap_; // only used by compact worker
 };
 
 }  //  namespace blackwidow

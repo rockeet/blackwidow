@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <terark/hash_strmap.hpp>
 
 #include "rocksdb/compaction_filter.h"
 
@@ -69,8 +70,6 @@ class ZSetsScoreFilter : public rocksdb::CompactionFilter {
       return true;
     }
 
-    int64_t unix_time;
-    rocksdb::Env::Default()->GetCurrentTime(&unix_time);
     if (cur_meta_timestamp_ != 0 &&
         cur_meta_timestamp_ < static_cast<int32_t>(unix_time)) {
       Trace("Drop[Timeout]");
@@ -84,10 +83,10 @@ class ZSetsScoreFilter : public rocksdb::CompactionFilter {
       return false;
     }
   }
+  int64_t unix_time;
 
   const char* Name() const override { return "ZSetsScoreFilter";}
 
- private:
   rocksdb::DB* db_;
   std::vector<rocksdb::ColumnFamilyHandle*>* cf_handles_ptr_;
   rocksdb::ReadOptions default_read_options_;
@@ -114,9 +113,10 @@ class ZSetsScoreFilterFactory : public rocksdb::CompactionFilterFactory {
     return "ZSetsScoreFilterFactory";
   }
 
- protected:
   rocksdb::DB** db_ptr_;
   std::vector<rocksdb::ColumnFamilyHandle*>* cf_handles_ptr_;
+  mutable uint64_t unix_time_;
+  terark::hash_strmap<VersionTimestamp> ttlmap_; // only used by compact worker
 };
 
 }  //  namespace blackwidow
