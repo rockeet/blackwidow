@@ -141,19 +141,19 @@ LRUCache<T1, T2>::~LRUCache() {
 
 template <typename T1, typename T2>
 size_t LRUCache<T1, T2>::Size() {
-  slash::MutexLock l(&mutex_);
+  //slash::MutexLock l(&mutex_);
   return size_;
 }
 
 template <typename T1, typename T2>
 size_t LRUCache<T1, T2>::TotalCharge() {
-  slash::MutexLock l(&mutex_);
+  //slash::MutexLock l(&mutex_);
   return usage_;
 }
 
 template <typename T1, typename T2>
 size_t LRUCache<T1, T2>::Capacity() {
-  slash::MutexLock l(&mutex_);
+  //slash::MutexLock l(&mutex_);
   return capacity_;
 }
 
