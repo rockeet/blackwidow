@@ -410,7 +410,7 @@ char* decode_00_0n(const char* ibeg, const char** ires, char* obeg, char* oend) 
       }
     }
   }
-  *ires = icur + 1;
+  *ires = icur + 2;
   return obeg + 2;
 }
 
