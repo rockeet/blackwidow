@@ -7,6 +7,11 @@
 #define SRC_BASE_DATA_KEY_FORMAT_H_
 
 namespace blackwidow {
+
+#define TOPLING_KEY_FORMAT
+char* encode_00_0n(const char* ibeg, const char* iend, char* obeg, char* oend, char out_end_mark);
+char* decode_00_0n(const char* ibeg, const char**ires, char* obeg, char* oend);
+
 class BaseDataKey {
  public:
   BaseDataKey(const Slice& key, int32_t version, const Slice& data) :
@@ -20,7 +25,12 @@ class BaseDataKey {
 
   const Slice Encode() {
     size_t usize = key_.size() + data_.size();
+#ifdef TOPLING_KEY_FORMAT
+    size_t nzero = std::count(key_.begin(), key_.end(), 0);
+    size_t needed = usize + nzero + 2 + sizeof(int32_t);
+#else
     size_t needed = usize + sizeof(int32_t) * 2;
+#endif
     char* dst;
     if (needed <= sizeof(space_)) {
       dst = space_;
@@ -34,10 +44,15 @@ class BaseDataKey {
     }
 
     start_ = dst;
+#ifdef TOPLING_KEY_FORMAT
+    dst = encode_00_0n(key_.data_, key_.end(), dst, dst+usize+nzero+2, 1);
+    ROCKSDB_VERIFY_EQ(dst, start_+usize+nzero+2);
+#else
     EncodeFixed32(dst, key_.size());
     dst += sizeof(int32_t);
     memcpy(dst, key_.data(), key_.size());
     dst += key_.size();
+#endif
     EncodeFixed32(dst, version_);
     dst += sizeof(int32_t);
     memcpy(dst, data_.data(), data_.size());
@@ -54,17 +69,29 @@ class BaseDataKey {
 
 class ParsedBaseDataKey {
  public:
-  explicit ParsedBaseDataKey(const std::string* key) {
-    const char* ptr = key->data();
+  explicit ParsedBaseDataKey(std::string* key_parse_inplace)
+    : ParsedBaseDataKey(*key_parse_inplace, key_parse_inplace) {}
+  ParsedBaseDataKey(Slice key, std::string* parse_buf) {
+    const char* ptr = key.data();
+#ifdef TOPLING_KEY_FORMAT
+    size_t cap = key.size_;
+    parse_buf->resize(cap);
+    char* obeg = parse_buf->data();
+    char* ocur = decode_00_0n(ptr, &ptr, obeg, obeg + cap);
+    ROCKSDB_VERIFY_LT(size_t(ptr - key.data_), key.size_);
+    key_ = Slice(obeg, ocur - obeg - 2);
+#else
     int32_t key_len = DecodeFixed32(ptr);
     ptr += sizeof(int32_t);
     key_ = Slice(ptr, key_len);
     ptr += key_len;
+#endif
     version_ = DecodeFixed32(ptr);
     ptr += sizeof(int32_t);
-    data_ = Slice(ptr, key->size() - key_len - sizeof(int32_t) * 2);
+    data_ = Slice(ptr, key.end() - ptr);
   }
 
+#ifndef TOPLING_KEY_FORMAT
   explicit ParsedBaseDataKey(const Slice& key) {
     const char* ptr = key.data();
     int32_t key_len = DecodeFixed32(ptr);
@@ -75,6 +102,7 @@ class ParsedBaseDataKey {
     ptr += sizeof(int32_t);
     data_ = Slice(ptr, key.size() - key_len - sizeof(int32_t) * 2);
   }
+#endif
 
   virtual ~ParsedBaseDataKey() = default;
 
@@ -98,10 +126,14 @@ class ParsedBaseDataKey {
 
 class ParsedHashesDataKey : public ParsedBaseDataKey {
  public:
+#ifdef TOPLING_KEY_FORMAT
+  using ParsedBaseDataKey::ParsedBaseDataKey;
+#else
   explicit ParsedHashesDataKey(const std::string* key)
               : ParsedBaseDataKey(key) {}
   explicit ParsedHashesDataKey(const Slice& key)
               : ParsedBaseDataKey(key) {}
+#endif
   Slice field() {
     return data_;
   }
@@ -109,10 +141,14 @@ class ParsedHashesDataKey : public ParsedBaseDataKey {
 
 class ParsedSetsMemberKey : public ParsedBaseDataKey {
  public:
+#ifdef TOPLING_KEY_FORMAT
+  using ParsedBaseDataKey::ParsedBaseDataKey;
+#else
   explicit ParsedSetsMemberKey(const std::string* key)
               : ParsedBaseDataKey(key) {}
   explicit ParsedSetsMemberKey(const Slice& key)
               : ParsedBaseDataKey(key) {}
+#endif
   Slice member() {
     return data_;
   }
@@ -120,10 +156,14 @@ class ParsedSetsMemberKey : public ParsedBaseDataKey {
 
 class ParsedZSetsMemberKey : public ParsedBaseDataKey {
  public:
+#ifdef TOPLING_KEY_FORMAT
+  using ParsedBaseDataKey::ParsedBaseDataKey;
+#else
   explicit ParsedZSetsMemberKey(const std::string* key)
               : ParsedBaseDataKey(key) {}
   explicit ParsedZSetsMemberKey(const Slice& key)
               : ParsedBaseDataKey(key) {}
+#endif
   Slice member() {
     return data_;
   }

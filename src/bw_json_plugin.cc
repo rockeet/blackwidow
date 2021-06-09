@@ -141,7 +141,7 @@ public:
   bool Filter(int level, const Slice& key,
               const rocksdb::Slice& value,
               std::string* new_value, bool* value_changed) const override {
-    ParsedBaseDataKey parsed_base_data_key(key);
+    ParsedBaseDataKey parsed_base_data_key(key, &parse_key_buf_);
     Trace("==========================START==========================");
     Trace("[DataFilter], key: %s, data = %s, version = %d",
           parsed_base_data_key.key().ToString().c_str(),
@@ -190,7 +190,7 @@ public:
   bool Filter(int level, const Slice& key,
               const rocksdb::Slice& value,
               std::string* new_value, bool* value_changed) const override {
-    ParsedListsDataKey parsed_lists_data_key(key);
+    ParsedListsDataKey parsed_lists_data_key(key, &parse_key_buf_);
     Trace("==========================START==========================");
     Trace("[DataFilter], key: %s, index = %lu, data = %s, version = %d",
           parsed_lists_data_key.key().ToString().c_str(),
@@ -240,7 +240,7 @@ public:
   bool Filter(int level, const Slice& key,
               const rocksdb::Slice& value,
               std::string* new_value, bool* value_changed) const override {
-    ParsedZSetsScoreKey parsed_zsets_score_key(key);
+    ParsedZSetsScoreKey parsed_zsets_score_key(key, &parse_key_buf_);
     Trace("==========================START==========================");
     Trace("[ScoreFilter], key: %s, score = %lf, member = %s, version = %d",
           parsed_zsets_score_key.key().ToString().c_str(),
@@ -367,5 +367,52 @@ ROCKSDB_REG_JSON_REPO_CONS_3(#Factory, Factory##SerDe, \
 RegDataFilterFactorySerDe(BaseDataFilterFactory, ParsedBaseMetaValue);
 RegDataFilterFactorySerDe(ListsDataFilterFactory, ParsedListsMetaValue);
 RegDataFilterFactorySerDe(ZSetsScoreFilterFactory, ParsedZSetsMetaValue);
+
+char* encode_00_0n(const char* ibeg, const char* iend, char* obeg, char* oend, char out_end_mark) {
+  ROCKSDB_VERIFY(0 != out_end_mark);
+  for (; ibeg < iend; ++ibeg) {
+    ROCKSDB_VERIFY_F(obeg < oend, "broken data: input remain bytes = %zd",
+                     iend - ibeg);
+    char b = *ibeg;
+    if (LIKELY(0 != b)) {
+      *obeg++ = b;
+    }
+    else {
+      obeg[0] = obeg[1] = 0; // 0 -> 00
+      obeg += 2;
+    }
+  }
+  obeg[0] = 0;
+  obeg[1] = out_end_mark;
+  return obeg + 2;
+}
+
+char* decode_00_0n(const char* ibeg, const char** ires, char* obeg, char* oend) {
+  const char* icur = ibeg;
+  for (; ; ++obeg) {
+    ROCKSDB_VERIFY_F(obeg < oend, "broken data: decoded input bytes = %zd",
+                     icur - ibeg);
+    char b = *icur;
+    if (LIKELY(0 != b)) {
+      *obeg = b;
+      icur++;
+    }
+    else {
+      b = icur[1];
+      if (0 != b) {
+        obeg[0] = 0;
+        obeg[1] = b; // out_end_mark in encode_00_0n
+        break;
+      }
+      else { // 00 -> 0
+        *obeg = 0;
+        icur += 2;
+      }
+    }
+  }
+  *ires = icur + 1;
+  return obeg + 2;
+}
+
 
 } // namespace blackwidow

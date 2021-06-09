@@ -66,12 +66,23 @@ class ZSetsScoreKey {
 
 class ParsedZSetsScoreKey {
  public:
-  explicit ParsedZSetsScoreKey(const std::string* key) {
-    const char* ptr = key->data();
+  explicit ParsedZSetsScoreKey(std::string* key_parse_inplace)
+    : ParsedZSetsScoreKey(*key_parse_inplace, key_parse_inplace) {}
+  ParsedZSetsScoreKey(Slice key, std::string* parse_buf) {
+    const char* ptr = key.data();
+#ifdef TOPLING_KEY_FORMAT
+    size_t cap = key.size_;
+    parse_buf->resize(cap);
+    char* obeg = parse_buf->data();
+    char* ocur = decode_00_0n(ptr, &ptr, obeg, obeg + cap);
+    ROCKSDB_VERIFY_LT(size_t(ptr - key.data_), key.size_);
+    key_ = Slice(obeg, ocur - obeg - 2);
+#else
     int32_t key_len = DecodeFixed32(ptr);
     ptr += sizeof(int32_t);
     key_ = Slice(ptr, key_len);
     ptr += key_len;
+#endif
     version_ = DecodeFixed32(ptr);
     ptr += sizeof(int32_t);
 
@@ -79,10 +90,10 @@ class ParsedZSetsScoreKey {
     const void* ptr_tmp = reinterpret_cast<const void*>(&tmp);
     score_ = *reinterpret_cast<const double*>(ptr_tmp);
     ptr += sizeof(uint64_t);
-    member_ = Slice(ptr, key->size() - key_len
-                       - 2 * sizeof(int32_t) - sizeof(uint64_t));
+    member_ = Slice(ptr, key.end() - ptr);
   }
 
+#ifndef TOPLING_KEY_FORMAT
   explicit ParsedZSetsScoreKey(const Slice& key) {
     const char* ptr = key.data();
     int32_t key_len = DecodeFixed32(ptr);
@@ -99,6 +110,7 @@ class ParsedZSetsScoreKey {
     member_ = Slice(ptr, key.size() - key_len
                        - 2 * sizeof(int32_t) - sizeof(uint64_t));
   }
+#endif
 
   Slice key() {
     return key_;

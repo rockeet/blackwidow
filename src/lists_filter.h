@@ -77,7 +77,7 @@ class ListsDataFilter : public rocksdb::CompactionFilter {
   bool Filter(int level, const rocksdb::Slice& key,
               const rocksdb::Slice& value,
               std::string* new_value, bool* value_changed) const override {
-    ParsedListsDataKey parsed_lists_data_key(key);
+    ParsedListsDataKey parsed_lists_data_key(key, &parse_key_buf_);
     Trace("==========================START==========================");
     Trace("[DataFilter], key: %s, index = %lu, data = %s, version = %d",
           parsed_lists_data_key.key().ToString().c_str(),
@@ -134,6 +134,7 @@ class ListsDataFilter : public rocksdb::CompactionFilter {
   rocksdb::DB* db_;
   std::vector<rocksdb::ColumnFamilyHandle*>* cf_handles_ptr_;
   rocksdb::ReadOptions default_read_options_;
+  mutable std::string parse_key_buf_;
   mutable std::string cur_key_;
   mutable bool meta_not_found_;
   mutable int32_t cur_meta_version_;
