@@ -301,6 +301,10 @@ std::unique_ptr<CompactionFilter>
 ListsDataFilterFactory::CreateCompactionFilter(const CompactionFilterContext&) {
   return Tpl_ttlmapNewFilter<WorkerListsDataFilter, ListsDataFilter>(this);
 }
+std::unique_ptr<CompactionFilter>
+ZSetsScoreFilterFactory::CreateCompactionFilter(const CompactionFilterContext&) {
+  return Tpl_ttlmapNewFilter<WorkerZSetsScoreFilter, ZSetsScoreFilter>(this);
+}
 
 DATA_IO_DUMP_RAW_MEM_E(VersionTimestamp);
 

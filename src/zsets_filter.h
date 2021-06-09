@@ -104,10 +104,7 @@ class ZSetsScoreFilterFactory : public rocksdb::CompactionFilterFactory {
     : db_ptr_(db_ptr), cf_handles_ptr_(handles_ptr) {}
 
   std::unique_ptr<rocksdb::CompactionFilter> CreateCompactionFilter(
-      const rocksdb::CompactionFilter::Context& context) override {
-    return std::unique_ptr<rocksdb::CompactionFilter>(
-        new ZSetsScoreFilter(*db_ptr_, cf_handles_ptr_));
-  }
+      const rocksdb::CompactionFilter::Context& context) override;
 
   const char* Name() const override {
     return "ZSetsScoreFilterFactory";
