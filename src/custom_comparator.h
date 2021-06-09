@@ -192,7 +192,7 @@ class ZSetsScoreKeyComparatorImpl : public rocksdb::Comparator {
     const char* ptr = str.data();
 
 #ifdef TOPLING_KEY_FORMAT
-    std::string key(str.size(), '\0');
+    std::string key(str.size() - 4 - 8, '\0');
     char* dk_end = decode_00_0n(ptr, &ptr, &key[0], &key[0] + key.size());
     ROCKSDB_VERIFY_LE(size_t(ptr - str.data()), str.size() - 4 - 8);
     int32_t key_len = int32_t(dk_end - &key[0]);
