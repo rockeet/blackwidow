@@ -148,9 +148,9 @@ public:
           parsed_base_data_key.data().ToString().c_str(),
           parsed_base_data_key.version());
 
-    std::string new_cur_key = parsed_base_data_key.key().ToString();
+    Slice new_cur_key = parsed_base_data_key.key();
     if (new_cur_key != cur_key_) {
-      cur_key_ = new_cur_key;
+      cur_key_.assign(new_cur_key.data_, new_cur_key.size_);
       size_t idx = ttlmap_->find_i(cur_key_);
       if (ttlmap_->end_i() != idx) {
         meta_not_found_ = false;
@@ -198,8 +198,9 @@ public:
           value.ToString().c_str(),
           parsed_lists_data_key.version());
 
-    if (parsed_lists_data_key.key().ToString() != cur_key_) {
-      cur_key_ = parsed_lists_data_key.key().ToString();
+    Slice new_cur_key = parsed_lists_data_key.key();
+    if (new_cur_key != cur_key_) {
+      cur_key_.assign(new_cur_key.data_, new_cur_key.size_);
       size_t idx = ttlmap_->find_i(cur_key_);
       if (ttlmap_->end_i() != idx) {
         meta_not_found_ = false;
@@ -247,8 +248,9 @@ public:
           parsed_zsets_score_key.member().ToString().c_str(),
           parsed_zsets_score_key.version());
 
-    if (parsed_zsets_score_key.key().ToString() != cur_key_) {
-      cur_key_ = parsed_zsets_score_key.key().ToString();
+    Slice new_cur_key = parsed_zsets_score_key.key();
+    if (new_cur_key != cur_key_) {
+      cur_key_.assign(new_cur_key.data_, new_cur_key.size_);
       size_t idx = ttlmap_->find_i(cur_key_);
       if (ttlmap_->end_i() != idx) {
         meta_not_found_ = false;
