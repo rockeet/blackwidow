@@ -351,17 +351,12 @@ struct DataFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
       // do nothing
     }
   }
-  bool Is_Singleton() const noexcept { return false; }
-
-  static const SerDeFunc<CompactionFilterFactory>*
-  New(const json& js, const JsonPluginRepo& repo) {
-    return new DataFilterFactorySerDe(js, repo);
-  }
 };
 
 #define RegDataFilterFactorySerDe(Factory, Parsed) \
-auto JS_New_##Factory##SerDe = &DataFilterFactorySerDe<Factory, Parsed>::New; \
-ROCKSDB_FACTORY_REG(#Factory, JS_New_##Factory##SerDe)
+using Factory##SerDe = DataFilterFactorySerDe<Factory, Parsed>; \
+ROCKSDB_REG_JSON_REPO_CONS_3(#Factory, Factory##SerDe, \
+                             SerDeFunc<CompactionFilterFactory>)
 
 RegDataFilterFactorySerDe(BaseDataFilterFactory, ParsedBaseMetaValue);
 RegDataFilterFactorySerDe(ListsDataFilterFactory, ParsedListsMetaValue);
