@@ -1374,11 +1374,12 @@ void RedisLists::ScanDatabase() {
   delete meta_iter;
 
   printf("\n***************List Node Data***************\n");
+  std::string parse_key_buf;
   auto data_iter = db_->NewIterator(iterator_options, handles_[1]);
   for (data_iter->SeekToFirst();
        data_iter->Valid();
        data_iter->Next()) {
-    ParsedListsDataKey parsed_lists_data_key(data_iter->key());
+    ParsedListsDataKey parsed_lists_data_key(data_iter->key(), &parse_key_buf);
     printf("[key : %-30s] [index : %-10lu] [data : %-20s] [version : %d]\n",
            parsed_lists_data_key.key().ToString().c_str(),
            parsed_lists_data_key.index(),

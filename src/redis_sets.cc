@@ -341,6 +341,7 @@ Status RedisSets::SDiff(const std::vector<std::string>& keys,
       && parsed_sets_meta_value.count() != 0) {
       bool found;
       Slice prefix;
+      std::string parse_key_buf;
       std::string member_value;
       version = parsed_sets_meta_value.version();
       SetsMemberKey sets_member_key(keys[0], version, Slice());
@@ -349,7 +350,7 @@ Status RedisSets::SDiff(const std::vector<std::string>& keys,
       for (iter->Seek(prefix);
            iter->Valid() && iter->key().starts_with(prefix);
            iter->Next()) {
-        ParsedSetsMemberKey parsed_sets_member_key(iter->key());
+        ParsedSetsMemberKey parsed_sets_member_key(iter->key(), &parse_key_buf);
         Slice member = parsed_sets_member_key.member();
 
         found = false;
@@ -417,6 +418,7 @@ Status RedisSets::SDiffstore(const Slice& destination,
     if (!parsed_sets_meta_value.IsStale()
       && parsed_sets_meta_value.count() != 0) {
       bool found;
+      std::string parse_key_buf;
       std::string member_value;
       version = parsed_sets_meta_value.version();
       SetsMemberKey sets_member_key(keys[0], version, Slice());
@@ -425,7 +427,7 @@ Status RedisSets::SDiffstore(const Slice& destination,
       for (iter->Seek(prefix);
            iter->Valid() && iter->key().starts_with(prefix);
            iter->Next()) {
-        ParsedSetsMemberKey parsed_sets_member_key(iter->key());
+        ParsedSetsMemberKey parsed_sets_member_key(iter->key(), &parse_key_buf);
         Slice member = parsed_sets_member_key.member();
 
         found = false;
@@ -520,6 +522,7 @@ Status RedisSets::SInter(const std::vector<std::string>& keys,
       return Status::OK();
     } else {
       bool reliable;
+      std::string parse_key_buf;
       std::string member_value;
       version = parsed_sets_meta_value.version();
       SetsMemberKey sets_member_key(keys[0], version, Slice());
@@ -528,7 +531,7 @@ Status RedisSets::SInter(const std::vector<std::string>& keys,
       for (iter->Seek(prefix);
            iter->Valid() && iter->key().starts_with(prefix);
            iter->Next()) {
-        ParsedSetsMemberKey parsed_sets_member_key(iter->key());
+        ParsedSetsMemberKey parsed_sets_member_key(iter->key(), &parse_key_buf);
         Slice member = parsed_sets_member_key.member();
 
         reliable = true;
@@ -610,6 +613,7 @@ Status RedisSets::SInterstore(const Slice& destination,
         have_invalid_sets = true;
       } else {
         bool reliable;
+        std::string parse_key_buf;
         std::string member_value;
         version = parsed_sets_meta_value.version();
         SetsMemberKey sets_member_key(keys[0], version, Slice());
@@ -618,7 +622,7 @@ Status RedisSets::SInterstore(const Slice& destination,
         for (iter->Seek(prefix);
              iter->Valid() && iter->key().starts_with(prefix);
              iter->Next()) {
-          ParsedSetsMemberKey parsed_sets_member_key(iter->key());
+          ParsedSetsMemberKey parsed_sets_member_key(iter->key(), &parse_key_buf);
           Slice member = parsed_sets_member_key.member();
 
           reliable = true;
@@ -725,13 +729,14 @@ Status RedisSets::SMembers(const Slice& key,
       return Status::NotFound();
     } else {
       version = parsed_sets_meta_value.version();
+      std::string parse_key_buf;
       SetsMemberKey sets_member_key(key, version, Slice());
       Slice prefix = sets_member_key.Encode();
       auto iter = db_->NewIterator(read_options, handles_[1]);
       for (iter->Seek(prefix);
            iter->Valid() && iter->key().starts_with(prefix);
            iter->Next()) {
-        ParsedSetsMemberKey parsed_sets_member_key(iter->key());
+        ParsedSetsMemberKey parsed_sets_member_key(iter->key(), &parse_key_buf);
         members->push_back(parsed_sets_member_key.member().ToString());
       }
       delete iter;
@@ -855,13 +860,14 @@ Status RedisSets::SPop(const Slice& key,
       int32_t version = parsed_sets_meta_value.version();
 
       SetsMemberKey sets_member_key(key, version, Slice());
+      std::string parse_key_buf;
       auto iter = db_->NewIterator(default_read_options_, handles_[1]);
       for (iter->Seek(sets_member_key.Encode());
            iter->Valid() && cur_index < size;
            iter->Next(), cur_index++) {
         if (cur_index == target_index) {
           batch.Delete(handles_[1], iter->key());
-          ParsedSetsMemberKey parsed_sets_member_key(iter->key());
+          ParsedSetsMemberKey parsed_sets_member_key(iter->key(), &parse_key_buf);
           *member = parsed_sets_member_key.member().ToString();
 
           parsed_sets_meta_value.ModifyCount(-1);
@@ -946,6 +952,7 @@ Status RedisSets::SRandmember(const Slice& key, int32_t count,
 
       int32_t cur_index = 0, idx = 0;
       SetsMemberKey sets_member_key(key, version, Slice());
+      std::string parse_key_buf;
       auto iter = db_->NewIterator(default_read_options_, handles_[1]);
       for (iter->Seek(sets_member_key.Encode());
            iter->Valid() && cur_index < size;
@@ -953,7 +960,7 @@ Status RedisSets::SRandmember(const Slice& key, int32_t count,
         if (static_cast<size_t>(idx) >= targets.size()) {
           break;
         }
-        ParsedSetsMemberKey parsed_sets_member_key(iter->key());
+        ParsedSetsMemberKey parsed_sets_member_key(iter->key(), &parse_key_buf);
         while (static_cast<size_t>(idx) < targets.size()
           && cur_index == targets[idx]) {
           idx++;
@@ -1046,6 +1053,7 @@ Status RedisSets::SUnion(const std::vector<std::string>& keys,
 
   Slice prefix;
   std::map<std::string, bool> result_flag;
+  std::string parse_key_buf;
   for (const auto& key_version : vaild_sets) {
     SetsMemberKey sets_member_key(key_version.key,
         key_version.version, Slice());
@@ -1054,7 +1062,7 @@ Status RedisSets::SUnion(const std::vector<std::string>& keys,
     for (iter->Seek(prefix);
          iter->Valid() && iter->key().starts_with(prefix);
          iter->Next()) {
-      ParsedSetsMemberKey parsed_sets_member_key(iter->key());
+      ParsedSetsMemberKey parsed_sets_member_key(iter->key(), &parse_key_buf);
       std::string member = parsed_sets_member_key.member().ToString();
       if (result_flag.find(member) == result_flag.end()) {
         members->push_back(member);
@@ -1101,6 +1109,7 @@ Status RedisSets::SUnionstore(const Slice& destination,
   Slice prefix;
   std::vector<std::string> members;
   std::map<std::string, bool> result_flag;
+  std::string parse_key_buf;
   for (const auto& key_version : vaild_sets) {
     SetsMemberKey sets_member_key(key_version.key,
         key_version.version, Slice());
@@ -1109,7 +1118,7 @@ Status RedisSets::SUnionstore(const Slice& destination,
     for (iter->Seek(prefix);
          iter->Valid() && iter->key().starts_with(prefix);
          iter->Next()) {
-      ParsedSetsMemberKey parsed_sets_member_key(iter->key());
+      ParsedSetsMemberKey parsed_sets_member_key(iter->key(), &parse_key_buf);
       std::string member = parsed_sets_member_key.member().ToString();
       if (result_flag.find(member) == result_flag.end()) {
         members.push_back(member);
@@ -1191,12 +1200,13 @@ Status RedisSets::SScan(const Slice& key,
 
       SetsMemberKey sets_member_prefix(key, version, sub_member);
       SetsMemberKey sets_member_key(key, version, start_point);
+      std::string parse_key_buf;
       std::string prefix = sets_member_prefix.Encode().ToString();
       rocksdb::Iterator* iter = db_->NewIterator(read_options, handles_[1]);
       for (iter->Seek(sets_member_key.Encode());
            iter->Valid() && rest > 0 && iter->key().starts_with(prefix);
            iter->Next()) {
-        ParsedSetsMemberKey parsed_sets_member_key(iter->key());
+        ParsedSetsMemberKey parsed_sets_member_key(iter->key(), &parse_key_buf);
         std::string member = parsed_sets_member_key.member().ToString();
         if (StringMatch(pattern.data(),
               pattern.size(), member.data(), member.size(), 0)) {
@@ -1209,7 +1219,7 @@ Status RedisSets::SScan(const Slice& key,
         && (iter->key().compare(prefix) <= 0
           || iter->key().starts_with(prefix))) {
         *next_cursor = cursor + step_length;
-        ParsedSetsMemberKey parsed_sets_member_key(iter->key());
+        ParsedSetsMemberKey parsed_sets_member_key(iter->key(), &parse_key_buf);
         std::string next_member = parsed_sets_member_key.member().ToString();
         StoreScanNextPoint(key, pattern, *next_cursor, next_member);
       } else {
@@ -1583,11 +1593,12 @@ void RedisSets::ScanDatabase() {
   delete meta_iter;
 
   printf("\n***************Sets Member Data***************\n");
+  std::string parse_key_buf;
   auto member_iter = db_->NewIterator(iterator_options, handles_[1]);
   for (member_iter->SeekToFirst();
        member_iter->Valid();
        member_iter->Next()) {
-    ParsedSetsMemberKey parsed_sets_member_key(member_iter->key());
+    ParsedSetsMemberKey parsed_sets_member_key(member_iter->key(), &parse_key_buf);
     printf("[key : %-30s] [member : %-20s] [version : %d]\n",
            parsed_sets_member_key.key().ToString().c_str(),
            parsed_sets_member_key.member().ToString().c_str(),

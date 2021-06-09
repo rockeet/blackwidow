@@ -257,6 +257,7 @@ Status RedisZSets::ZPopMax(const Slice& key,
       int32_t num = parsed_zsets_meta_value.count();
       num = num <= count ? num : count;
       int32_t version = parsed_zsets_meta_value.version();
+      std::string parse_key_buf;
       ZSetsScoreKey zsets_score_key(key, version,
           std::numeric_limits<double>::max(), Slice());
       rocksdb::Iterator* iter = db_->NewIterator(default_read_options_, handles_[2]);
@@ -264,7 +265,7 @@ Status RedisZSets::ZPopMax(const Slice& key,
       for (iter->SeekForPrev(zsets_score_key.Encode());
            iter->Valid() && del_cnt < num;
            iter->Prev()) {
-        ParsedZSetsScoreKey parsed_zsets_score_key(iter->key());
+        ParsedZSetsScoreKey parsed_zsets_score_key(iter->key(), &parse_key_buf);
         score_members->emplace_back(
                        ScoreMember{parsed_zsets_score_key.score(), 
                                    parsed_zsets_score_key.member().ToString()});
@@ -305,6 +306,7 @@ Status RedisZSets::ZPopMin(const Slice& key,
       int32_t num = parsed_zsets_meta_value.count();
       num = num <= count ? num : count;
       int32_t version = parsed_zsets_meta_value.version();
+      std::string parse_key_buf;
       ZSetsScoreKey zsets_score_key(key, version,
                     std::numeric_limits<double>::lowest(), Slice());
       rocksdb::Iterator* iter = db_->NewIterator(default_read_options_, handles_[2]);
@@ -312,7 +314,7 @@ Status RedisZSets::ZPopMin(const Slice& key,
       for (iter->Seek(zsets_score_key.Encode());
            iter->Valid() && del_cnt < num;
            iter->Next()) {
-        ParsedZSetsScoreKey parsed_zsets_score_key(iter->key());
+        ParsedZSetsScoreKey parsed_zsets_score_key(iter->key(), &parse_key_buf);
         score_members->emplace_back(
                        ScoreMember{parsed_zsets_score_key.score(),
                                    parsed_zsets_score_key.member().ToString()} );
@@ -479,6 +481,7 @@ Status RedisZSets::ZCount(const Slice& key,
       int32_t cnt = 0;
       int32_t cur_index = 0;
       int32_t stop_index = parsed_zsets_meta_value.count() - 1;
+      std::string parse_key_buf;
       ScoreMember score_member;
       ZSetsScoreKey zsets_score_key(key, version, min, Slice());
       rocksdb::Iterator* iter = db_->NewIterator(read_options, handles_[2]);
@@ -487,7 +490,7 @@ Status RedisZSets::ZCount(const Slice& key,
            iter->Next(), ++cur_index) {
           bool left_pass = false;
           bool right_pass = false;
-          ParsedZSetsScoreKey parsed_zsets_score_key(iter->key());
+          ParsedZSetsScoreKey parsed_zsets_score_key(iter->key(), &parse_key_buf);
           if (parsed_zsets_score_key.key() != key) {
               break;
           }
@@ -613,6 +616,7 @@ Status RedisZSets::ZRange(const Slice& key,
         return s;
       }
       int32_t cur_index = 0;
+      std::string parse_key_buf;
       ScoreMember score_member;
       ZSetsScoreKey zsets_score_key(key, version,
           std::numeric_limits<double>::lowest(), Slice());
@@ -621,7 +625,7 @@ Status RedisZSets::ZRange(const Slice& key,
            iter->Valid() && cur_index <= stop_index;
            iter->Next(), ++cur_index) {
         if (cur_index >= start_index) {
-          ParsedZSetsScoreKey parsed_zsets_score_key(iter->key());
+          ParsedZSetsScoreKey parsed_zsets_score_key(iter->key(), &parse_key_buf);
           score_member.score = parsed_zsets_score_key.score();
           score_member.member = parsed_zsets_score_key.member().ToString();
           score_members->push_back(score_member);
@@ -660,6 +664,7 @@ Status RedisZSets::ZRangebyscore(const Slice& key,
       int32_t index = 0;
       int32_t stop_index = parsed_zsets_meta_value.count() - 1;
       int64_t skipped = 0;
+      std::string parse_key_buf;
       ScoreMember score_member;
       ZSetsScoreKey zsets_score_key(key, version, min, Slice());
       rocksdb::Iterator* iter = db_->NewIterator(read_options, handles_[2]);
@@ -668,7 +673,7 @@ Status RedisZSets::ZRangebyscore(const Slice& key,
            iter->Next(), ++index) {
         bool left_pass = false;
         bool right_pass = false;
-        ParsedZSetsScoreKey parsed_zsets_score_key(iter->key());
+        ParsedZSetsScoreKey parsed_zsets_score_key(iter->key(), &parse_key_buf);
         if (parsed_zsets_score_key.key() != key) {
             break;
         }
@@ -728,6 +733,7 @@ Status RedisZSets::ZRank(const Slice& key,
       int32_t version = parsed_zsets_meta_value.version();
       int32_t index = 0;
       int32_t stop_index = parsed_zsets_meta_value.count() - 1;
+      std::string parse_key_buf;
       ScoreMember score_member;
       ZSetsScoreKey zsets_score_key(key, version,
           std::numeric_limits<double>::lowest(), Slice());
@@ -735,7 +741,7 @@ Status RedisZSets::ZRank(const Slice& key,
       for (iter->Seek(zsets_score_key.Encode());
            iter->Valid() && index <= stop_index;
            iter->Next(), ++index) {
-          ParsedZSetsScoreKey parsed_zsets_score_key(iter->key());
+          ParsedZSetsScoreKey parsed_zsets_score_key(iter->key(), &parse_key_buf);
           if (!parsed_zsets_score_key.member().compare(member)) {
             found = true;
             break;
@@ -840,6 +846,7 @@ Status RedisZSets::ZRemrangebyrank(const Slice& key,
       if (start_index > stop_index || start_index >= count) {
         return s;
       }
+      std::string parse_key_buf;
       ZSetsScoreKey zsets_score_key(key, version,
           std::numeric_limits<double>::lowest(), Slice());
       rocksdb::Iterator* iter =
@@ -848,7 +855,7 @@ Status RedisZSets::ZRemrangebyrank(const Slice& key,
            iter->Valid() && cur_index <= stop_index;
            iter->Next(), ++cur_index) {
         if (cur_index >= start_index) {
-          ParsedZSetsScoreKey parsed_zsets_score_key(iter->key());
+          ParsedZSetsScoreKey parsed_zsets_score_key(iter->key(), &parse_key_buf);
           ZSetsMemberKey zsets_member_key(key, version,
               parsed_zsets_score_key.member());
           batch.Delete(handles_[1], zsets_member_key.Encode());
@@ -890,6 +897,7 @@ Status RedisZSets::ZRemrangebyscore(const Slice& key,
       return Status::NotFound();
     } else {
       std::string member;
+      std::string parse_key_buf;
       int32_t del_cnt = 0;
       int32_t cur_index = 0;
       int32_t stop_index = parsed_zsets_meta_value.count() - 1;
@@ -902,7 +910,7 @@ Status RedisZSets::ZRemrangebyscore(const Slice& key,
            iter->Next(), ++cur_index) {
         bool left_pass = false;
         bool right_pass = false;
-        ParsedZSetsScoreKey parsed_zsets_score_key(iter->key());
+        ParsedZSetsScoreKey parsed_zsets_score_key(iter->key(), &parse_key_buf);
         if (parsed_zsets_score_key.key() != key) {
             break;
         }
@@ -974,6 +982,7 @@ Status RedisZSets::ZRevrange(const Slice& key,
         return s;
       }
       int32_t cur_index = count - 1;
+      std::string parse_key_buf;
       ScoreMember score_member;
       ZSetsScoreKey zsets_score_key(key, version,
           std::numeric_limits<double>::max(), Slice());
@@ -982,7 +991,7 @@ Status RedisZSets::ZRevrange(const Slice& key,
            iter->Valid() && cur_index >= start_index;
            iter->Prev(), --cur_index) {
         if (cur_index <= stop_index) {
-          ParsedZSetsScoreKey parsed_zsets_score_key(iter->key());
+          ParsedZSetsScoreKey parsed_zsets_score_key(iter->key(), &parse_key_buf);
           score_member.score = parsed_zsets_score_key.score();
           score_member.member = parsed_zsets_score_key.member().ToString();
           score_members->push_back(score_member);
@@ -1020,6 +1029,7 @@ Status RedisZSets::ZRevrangebyscore(const Slice& key,
       int32_t version = parsed_zsets_meta_value.version();
       int32_t left = parsed_zsets_meta_value.count();
       int64_t skipped = 0;
+      std::string parse_key_buf;
       ScoreMember score_member;
       ZSetsScoreKey zsets_score_key(key, version,
           std::nextafter(max, std::numeric_limits<double>::max()), Slice());
@@ -1029,7 +1039,7 @@ Status RedisZSets::ZRevrangebyscore(const Slice& key,
            iter->Prev(), --left) {
         bool left_pass = false;
         bool right_pass = false;
-        ParsedZSetsScoreKey parsed_zsets_score_key(iter->key());
+        ParsedZSetsScoreKey parsed_zsets_score_key(iter->key(), &parse_key_buf);
         if (parsed_zsets_score_key.key() != key) {
           break;
         }
@@ -1090,13 +1100,14 @@ Status RedisZSets::ZRevrank(const Slice& key,
       int32_t rev_index = 0;
       int32_t left = parsed_zsets_meta_value.count();
       int32_t version = parsed_zsets_meta_value.version();
+      std::string parse_key_buf;
       ZSetsScoreKey zsets_score_key(key, version,
           std::numeric_limits<double>::max(), Slice());
       rocksdb::Iterator* iter = db_->NewIterator(read_options, handles_[2]);
       for (iter->SeekForPrev(zsets_score_key.Encode());
            iter->Valid() && left >= 0;
            iter->Prev(), --left, ++rev_index) {
-        ParsedZSetsScoreKey parsed_zsets_score_key(iter->key());
+        ParsedZSetsScoreKey parsed_zsets_score_key(iter->key(), &parse_key_buf);
         if (!parsed_zsets_score_key.member().compare(member)) {
           found = true;
           break;
@@ -1171,6 +1182,7 @@ Status RedisZSets::ZUnionstore(const Slice& destination,
   std::map<std::string, double> member_score_map;
 
   Status s;
+  std::string parse_key_buf;
   for (size_t idx = 0; idx < keys.size(); ++idx) {
     s = db_->Get(read_options, handles_[0], keys[idx], &meta_value);
     if (s.ok()) {
@@ -1188,7 +1200,7 @@ Status RedisZSets::ZUnionstore(const Slice& destination,
         for (iter->Seek(zsets_score_key.Encode());
              iter->Valid() && cur_index <= stop_index;
              iter->Next(), ++cur_index) {
-          ParsedZSetsScoreKey parsed_zsets_score_key(iter->key());
+          ParsedZSetsScoreKey parsed_zsets_score_key(iter->key(), &parse_key_buf);
           sm.score = parsed_zsets_score_key.score();
           sm.member = parsed_zsets_score_key.member().ToString();
           if (member_score_map.find(sm.member) == member_score_map.end()) {
@@ -1294,13 +1306,14 @@ Status RedisZSets::ZInterstore(const Slice& destination,
   }
 
   if (!have_invalid_zsets) {
+    std::string parse_key_buf;
     ZSetsScoreKey zsets_score_key(vaild_zsets[0].key, vaild_zsets[0].version,
         std::numeric_limits<double>::lowest(), Slice());
     rocksdb::Iterator* iter = db_->NewIterator(read_options, handles_[2]);
     for (iter->Seek(zsets_score_key.Encode());
          iter->Valid() && cur_index <= stop_index;
          iter->Next(), ++cur_index) {
-      ParsedZSetsScoreKey parsed_zsets_score_key(iter->key());
+      ParsedZSetsScoreKey parsed_zsets_score_key(iter->key(), &parse_key_buf);
       double score = parsed_zsets_score_key.score();
       std::string member = parsed_zsets_score_key.member().ToString();
       score_members.push_back({score, member});
@@ -1399,6 +1412,7 @@ Status RedisZSets::ZRangebylex(const Slice& key,
       int32_t version = parsed_zsets_meta_value.version();
       int32_t cur_index = 0;
       int32_t stop_index = parsed_zsets_meta_value.count() - 1;
+      std::string parse_key_buf;
       ZSetsMemberKey zsets_member_key(key, version, Slice());
       rocksdb::Iterator* iter = db_->NewIterator(read_options, handles_[1]);
       for (iter->Seek(zsets_member_key.Encode());
@@ -1406,7 +1420,7 @@ Status RedisZSets::ZRangebylex(const Slice& key,
            iter->Next(), ++cur_index) {
         bool left_pass = false;
         bool right_pass = false;
-        ParsedZSetsMemberKey parsed_zsets_member_key(iter->key());
+        ParsedZSetsMemberKey parsed_zsets_member_key(iter->key(), &parse_key_buf);
         Slice member = parsed_zsets_member_key.member();
         if (left_no_limit
           || (left_close && min.compare(member) <= 0)
@@ -1474,6 +1488,7 @@ Status RedisZSets::ZRemrangebylex(const Slice& key,
       int32_t version = parsed_zsets_meta_value.version();
       int32_t cur_index = 0;
       int32_t stop_index = parsed_zsets_meta_value.count() - 1;
+      std::string parse_key_buf;
       ZSetsMemberKey zsets_member_key(key, version, Slice());
       rocksdb::Iterator* iter = db_->NewIterator(read_options, handles_[1]);
       for (iter->Seek(zsets_member_key.Encode());
@@ -1481,7 +1496,7 @@ Status RedisZSets::ZRemrangebylex(const Slice& key,
            iter->Next(), ++cur_index) {
         bool left_pass = false;
         bool right_pass = false;
-        ParsedZSetsMemberKey parsed_zsets_member_key(iter->key());
+        ParsedZSetsMemberKey parsed_zsets_member_key(iter->key(), &parse_key_buf);
         Slice member = parsed_zsets_member_key.member();
         if (left_no_limit
           || (left_close && min.compare(member) <= 0)
@@ -1719,12 +1734,13 @@ Status RedisZSets::ZScan(const Slice& key,
 
       ZSetsMemberKey zsets_member_prefix(key, version, sub_member);
       ZSetsMemberKey zsets_member_key(key, version, start_point);
+      std::string parse_key_buf;
       std::string prefix = zsets_member_prefix.Encode().ToString();
       rocksdb::Iterator* iter = db_->NewIterator(read_options, handles_[1]);
       for (iter->Seek(zsets_member_key.Encode());
            iter->Valid() && rest > 0 && iter->key().starts_with(prefix);
            iter->Next()) {
-        ParsedZSetsMemberKey parsed_zsets_member_key(iter->key());
+        ParsedZSetsMemberKey parsed_zsets_member_key(iter->key(), &parse_key_buf);
         std::string member = parsed_zsets_member_key.member().ToString();
         if (StringMatch(pattern.data(),
               pattern.size(), member.data(), member.size(), 0)) {
@@ -1740,7 +1756,7 @@ Status RedisZSets::ZScan(const Slice& key,
         && (iter->key().compare(prefix) <= 0
           || iter->key().starts_with(prefix))) {
         *next_cursor = cursor + step_length;
-        ParsedZSetsMemberKey parsed_zsets_member_key(iter->key());
+        ParsedZSetsMemberKey parsed_zsets_member_key(iter->key(), &parse_key_buf);
         std::string next_member = parsed_zsets_member_key.member().ToString();
         StoreScanNextPoint(key, pattern, *next_cursor, next_member);
       } else {
@@ -1963,11 +1979,12 @@ void RedisZSets::ScanDatabase() {
   delete meta_iter;
 
   printf("\n***************ZSets Member To Score Data***************\n");
+  std::string parse_key_buf;
   auto member_iter = db_->NewIterator(iterator_options, handles_[1]);
   for (member_iter->SeekToFirst();
        member_iter->Valid();
        member_iter->Next()) {
-    ParsedZSetsMemberKey parsed_zsets_member_key(member_iter->key());
+    ParsedZSetsMemberKey parsed_zsets_member_key(member_iter->key(), &parse_key_buf);
 
     uint64_t tmp = DecodeFixed64(member_iter->value().data());
     const void* ptr_tmp = reinterpret_cast<const void*>(&tmp);
@@ -1986,7 +2003,7 @@ void RedisZSets::ScanDatabase() {
   for (score_iter->SeekToFirst();
        score_iter->Valid();
        score_iter->Next()) {
-    ParsedZSetsScoreKey parsed_zsets_score_key(score_iter->key());
+    ParsedZSetsScoreKey parsed_zsets_score_key(score_iter->key(), &parse_key_buf);
     printf("[key : %-30s] [score : %-20lf] [member : %-20s] [version : %d]\n",
            parsed_zsets_score_key.key().ToString().c_str(),
            parsed_zsets_score_key.score(),
