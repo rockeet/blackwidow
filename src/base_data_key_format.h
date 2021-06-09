@@ -26,6 +26,7 @@ class BaseDataKey {
   const Slice Encode() {
     size_t usize = key_.size() + data_.size();
 #ifdef TOPLING_KEY_FORMAT
+    size_t ksize = key_.size_;
     size_t nzero = std::count(key_.begin(), key_.end(), 0);
     size_t needed = usize + nzero + 2 + sizeof(int32_t);
 #else
@@ -45,8 +46,8 @@ class BaseDataKey {
 
     start_ = dst;
 #ifdef TOPLING_KEY_FORMAT
-    dst = encode_00_0n(key_.data_, key_.end(), dst, dst+usize+nzero+2, 1);
-    ROCKSDB_VERIFY_EQ(dst, start_+usize+nzero+2);
+    dst = encode_00_0n(key_.data_, key_.end(), dst, dst+ksize+nzero+2, 1);
+    ROCKSDB_VERIFY_EQ(dst, start_+ksize+nzero+2);
 #else
     EncodeFixed32(dst, key_.size());
     dst += sizeof(int32_t);
