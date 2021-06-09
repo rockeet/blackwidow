@@ -44,7 +44,7 @@ class ListsDataKey {
     start_ = dst;
 #ifdef TOPLING_KEY_FORMAT
     dst = encode_00_0n(key_.data_, key_.end(), dst, dst+usize+nzero+2, 1);
-    ROCKSDB_VERIFY_EQ(dst, start_+usize+nzero+2);
+    ROCKSDB_VERIFY_EQ(size_t(dst-start_), usize+nzero+2);
 #else
     EncodeFixed32(dst, key_.size());
     dst += sizeof(int32_t);

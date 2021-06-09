@@ -13,6 +13,12 @@
 #include <string.h>
 
 namespace blackwidow {
+
+#define TOPLING_KEY_FORMAT
+char* encode_00_0n(const char* ibeg, const char* iend, char* obeg, char* oend, char out_end_mark);
+char* decode_00_0n(const char* ibeg, const char**ires, char* obeg, char* oend);
+const char* end_of_00_0n(const char* encoded);
+
   static const bool kLittleEndian = BLACKWIDOW_PLATFORM_IS_LITTLE_ENDIAN;
 #undef BLACKWIDOW_PLATFORM_IS_LITTLE_ENDIAN
 

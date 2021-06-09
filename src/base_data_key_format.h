@@ -6,11 +6,9 @@
 #ifndef SRC_BASE_DATA_KEY_FORMAT_H_
 #define SRC_BASE_DATA_KEY_FORMAT_H_
 
-namespace blackwidow {
+#include "coding.h"
 
-#define TOPLING_KEY_FORMAT
-char* encode_00_0n(const char* ibeg, const char* iend, char* obeg, char* oend, char out_end_mark);
-char* decode_00_0n(const char* ibeg, const char**ires, char* obeg, char* oend);
+namespace blackwidow {
 
 class BaseDataKey {
  public:
@@ -47,7 +45,7 @@ class BaseDataKey {
     start_ = dst;
 #ifdef TOPLING_KEY_FORMAT
     dst = encode_00_0n(key_.data_, key_.end(), dst, dst+ksize+nzero+2, 1);
-    ROCKSDB_VERIFY_EQ(dst, start_+ksize+nzero+2);
+    ROCKSDB_VERIFY_EQ(size_t(dst-start_), ksize+nzero+2);
 #else
     EncodeFixed32(dst, key_.size());
     dst += sizeof(int32_t);

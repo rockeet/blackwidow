@@ -25,6 +25,22 @@ class ListsDataKeyComparatorImpl : public rocksdb::Comparator {
     const char* ptr_b = b.data();
     int32_t a_size = static_cast<int32_t>(a.size());
     int32_t b_size = static_cast<int32_t>(b.size());
+  #ifdef TOPLING_KEY_FORMAT
+    const char*  kend_a = end_of_00_0n(ptr_a);
+    const char*  kend_b = end_of_00_0n(ptr_b);
+    const size_t klen_a = kend_a - ptr_a;
+    const size_t klen_b = kend_b - ptr_b;
+    ROCKSDB_VERIFY_EQ(klen_a + 12, a.size_);
+    ROCKSDB_VERIFY_EQ(klen_b + 12, b.size_);
+    auto minlen = std::min(klen_a, klen_b);
+    auto cmpret = memcmp(ptr_a, ptr_b, minlen);
+    if (cmpret)
+      return cmpret;
+    if (klen_a != klen_b)
+      return int(klen_a) - int(klen_b); // key len must < INT_MAX
+    ptr_a = kend_a;
+    ptr_b = kend_b;
+  #else
     int32_t key_a_len = DecodeFixed32(ptr_a);
     int32_t key_b_len = DecodeFixed32(ptr_b);
     ptr_a += sizeof(int32_t);
@@ -44,6 +60,7 @@ class ListsDataKeyComparatorImpl : public rocksdb::Comparator {
     } else if (ptr_b - b.data() == b_size) {
       return 1;
     }
+#endif
 
     int32_t version_a = DecodeFixed32(ptr_a);
     int32_t version_b = DecodeFixed32(ptr_b);
@@ -96,17 +113,36 @@ class ZSetsScoreKeyComparatorImpl : public rocksdb::Comparator {
   }
 
   int Compare(const Slice& a, const Slice& b) const override {
+#ifndef TOPLING_KEY_FORMAT
     assert(a.size() > sizeof(int32_t));
     assert(a.size() >= DecodeFixed32(a.data())
             + 2 * sizeof(int32_t) + sizeof(uint64_t));
     assert(b.size() > sizeof(int32_t));
     assert(b.size() >= DecodeFixed32(b.data())
             + 2 * sizeof(int32_t) + sizeof(uint64_t));
+#endif
 
     const char* ptr_a = a.data();
     const char* ptr_b = b.data();
     int32_t a_size = static_cast<int32_t>(a.size());
     int32_t b_size = static_cast<int32_t>(b.size());
+#ifdef TOPLING_KEY_FORMAT
+    const char*  kend_a = end_of_00_0n(ptr_a);
+    const char*  kend_b = end_of_00_0n(ptr_b);
+    const size_t klen_a = kend_a - ptr_a + 4; // 4B is version
+    const size_t klen_b = kend_b - ptr_b + 4;
+    ROCKSDB_VERIFY_LE(klen_a + 8, a.size_);
+    ROCKSDB_VERIFY_LE(klen_b + 8, b.size_);
+    // key + version is bytewise compare
+    auto minlen = std::min(klen_a, klen_b);
+    auto ret = memcmp(ptr_a, ptr_b, minlen);
+    if (ret)
+      return ret;
+    if (klen_a != klen_b)
+      return int(klen_a) - int(klen_b); // key len must < INT_MAX
+    ptr_a = kend_a;
+    ptr_b = kend_b;
+#else
     int32_t key_a_len = DecodeFixed32(ptr_a);
     int32_t key_b_len = DecodeFixed32(ptr_b);
     Slice key_a_prefix(ptr_a,  key_a_len + 2 * sizeof(int32_t));
@@ -117,6 +153,7 @@ class ZSetsScoreKeyComparatorImpl : public rocksdb::Comparator {
     if (ret) {
       return ret;
     }
+#endif
 
     uint64_t a_i = DecodeFixed64(ptr_a);
     uint64_t b_i = DecodeFixed64(ptr_b);
@@ -154,11 +191,19 @@ class ZSetsScoreKeyComparatorImpl : public rocksdb::Comparator {
   void ParseAndPrintZSetsScoreKey(const std::string& from, const std::string& str) {
     const char* ptr = str.data();
 
+#ifdef TOPLING_KEY_FORMAT
+    std::string key(str.size(), '\0');
+    char* dk_end = decode_00_0n(ptr, &ptr, &key[0], &key[0] + key.size());
+    ROCKSDB_VERIFY_LE(size_t(ptr - str.data()), str.size() - 4 - 8);
+    int32_t key_len = int32_t(dk_end - &key[0]);
+    key.resize(key_len);
+#else
     int32_t key_len = DecodeFixed32(ptr);
     ptr += sizeof(int32_t);
 
     std::string key(ptr, key_len);
     ptr += key_len;
+#endif
 
     int32_t version = DecodeFixed32(ptr);
     ptr += sizeof(int32_t);
@@ -169,7 +214,7 @@ class ZSetsScoreKeyComparatorImpl : public rocksdb::Comparator {
     ptr += sizeof(uint64_t);
 
 
-    std::string member(ptr, str.size() - (key_len + 2 * sizeof(int32_t) + sizeof(uint64_t)));
+    std::string member(ptr, str.data() + str.size());
     printf("%s: total_len[%lu], key_len[%d], key[%s], version[%d], score[%lf], member[%s]\n",
             from.data(), str.size(), key_len, key.data(), version, score, member.data());
   }
@@ -182,6 +227,7 @@ class ZSetsScoreKeyComparatorImpl : public rocksdb::Comparator {
   // i.e., an implementation of this method that does nothing is correct.
   void FindShortestSeparator(std::string* start,
                              const Slice& limit) const override {
+#ifndef TOPLING_KEY_FORMAT
     assert(start->size() > sizeof(int32_t));
     assert(start->size() >= DecodeFixed32(start->data())
             + 2 * sizeof(int32_t) + sizeof(uint64_t));
@@ -273,6 +319,7 @@ class ZSetsScoreKeyComparatorImpl : public rocksdb::Comparator {
         }
       }
     }
+#endif
   }
 
   // Changes *key to a short string >= *key.

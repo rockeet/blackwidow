@@ -414,5 +414,15 @@ char* decode_00_0n(const char* ibeg, const char** ires, char* obeg, char* oend) 
   return obeg + 2;
 }
 
+const char* end_of_00_0n(const char* encoded) {
+  while (true) {
+    if (encoded[0])
+      encoded++;
+    else if (encoded[1]) // 0n
+      return encoded + 2;
+    else // 00
+      encoded += 2;
+  }
+}
 
 } // namespace blackwidow
