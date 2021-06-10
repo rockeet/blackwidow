@@ -73,12 +73,12 @@ class ParsedBaseDataKey {
   ParsedBaseDataKey(Slice key, std::string* parse_buf) {
     const char* ptr = key.data();
 #ifdef TOPLING_KEY_FORMAT
-    size_t cap = key.size_;
+    size_t cap = key.size_ - 2;
     parse_buf->resize(cap);
     char* obeg = parse_buf->data();
     char* oend = decode_00_0n(ptr, &ptr, obeg, obeg + cap);
     ROCKSDB_VERIFY_LT(size_t(ptr - key.data_), key.size_);
-    key_ = Slice(obeg, oend - obeg - 2);
+    key_ = Slice(obeg, oend - obeg);
 #else
     int32_t key_len = DecodeFixed32(ptr);
     ptr += sizeof(int32_t);

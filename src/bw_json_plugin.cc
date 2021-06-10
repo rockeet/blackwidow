@@ -387,6 +387,10 @@ char* encode_00_0n(const char* ibeg, const char* iend, char* obeg, char* oend, c
   return obeg + 2;
 }
 
+///@param ires *ires point to next byte after ending 0n,
+///             this is different to return value
+///@returns returns output end pos, do NOT decode ending 0n!
+///@note ending 0n will NOT be written to output
 char* decode_00_0n(const char* ibeg, const char** ires, char* obeg, char* oend) {
   const char* icur = ibeg;
   for (; ; ++obeg) {
@@ -400,8 +404,9 @@ char* decode_00_0n(const char* ibeg, const char** ires, char* obeg, char* oend) 
     else {
       b = icur[1];
       if (0 != b) {
-        obeg[0] = 0;
-        obeg[1] = b; // out_end_mark in encode_00_0n
+        // do not decode ending 0n
+        // obeg[0] = 0;
+        // obeg[1] = b; // out_end_mark in encode_00_0n
         break;
       }
       else { // 00 -> 0
@@ -411,9 +416,10 @@ char* decode_00_0n(const char* ibeg, const char** ires, char* obeg, char* oend) 
     }
   }
   *ires = icur + 2;
-  return obeg + 2;
+  return obeg;
 }
 
+///@returns next byte pos after ending 0n
 const char* end_of_00_0n(const char* encoded) {
   while (true) {
     if (encoded[0])
