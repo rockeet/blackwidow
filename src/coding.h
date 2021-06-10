@@ -11,6 +11,7 @@
 #define BLACKWIDOW_PLATFORM_IS_LITTLE_ENDIAN (__BYTE_ORDER == __LITTLE_ENDIAN)
 #endif
 #include <string.h>
+#include <terark/io/DataIO_Basic.hpp>
 #include <terark/util/memcmp_coding.hpp>
 
 namespace blackwidow {
@@ -19,6 +20,8 @@ namespace blackwidow {
 using terark::encode_00_0n;
 using terark::decode_00_0n;
 using terark::end_of_00_0n;
+using terark::encode_memcmp_double;
+using terark::decode_memcmp_double;
 
 
   static const bool kLittleEndian = BLACKWIDOW_PLATFORM_IS_LITTLE_ENDIAN;

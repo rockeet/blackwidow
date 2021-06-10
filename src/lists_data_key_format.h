@@ -45,15 +45,17 @@ class ListsDataKey {
 #ifdef TOPLING_KEY_FORMAT
     dst = encode_00_0n(key_.data_, key_.end(), dst, dst+usize+nzero+2, 1);
     ROCKSDB_VERIFY_EQ(size_t(dst-start_), usize+nzero+2);
+    unaligned_save(dst + 0, VALUE_OF_BYTE_SWAP_IF_LITTLE_ENDIAN(version_));
+    unaligned_save(dst + 4, VALUE_OF_BYTE_SWAP_IF_LITTLE_ENDIAN(index_));
 #else
     EncodeFixed32(dst, key_.size());
     dst += sizeof(int32_t);
     memcpy(dst, key_.data(), key_.size());
     dst += key_.size();
-#endif
     EncodeFixed32(dst, version_);
     dst += sizeof(int32_t);
     EncodeFixed64(dst, index_);
+#endif
     return Slice(start_, needed);
   }
 
@@ -78,15 +80,17 @@ class ParsedListsDataKey {
     char* oend = decode_00_0n(ptr, &ptr, obeg, obeg + cap);
     ROCKSDB_VERIFY_LT(size_t(ptr - key.data_), key.size_);
     key_ = Slice(obeg, oend - obeg);
+    version_ = VALUE_OF_BYTE_SWAP_IF_LITTLE_ENDIAN(unaligned_load<int32_t>(ptr));
+    index_ = VALUE_OF_BYTE_SWAP_IF_LITTLE_ENDIAN(unaligned_load<uint64_t>(ptr+4));
 #else
     int32_t key_len = DecodeFixed32(ptr);
     ptr += sizeof(int32_t);
     key_ = Slice(ptr, key_len);
     ptr += key_len;
-#endif
     version_ = DecodeFixed32(ptr);
     ptr += sizeof(int32_t);
     index_ = DecodeFixed64(ptr);
+#endif
   }
 
 #ifndef TOPLING_KEY_FORMAT
