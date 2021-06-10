@@ -6,6 +6,8 @@
 #ifndef SRC_ZSETS_DATA_KEY_FORMAT_H_
 #define SRC_ZSETS_DATA_KEY_FORMAT_H_
 
+#include "base_data_key_format.h"
+
 namespace blackwidow {
 
 /*
@@ -27,8 +29,16 @@ class ZSetsScoreKey {
   }
 
   const Slice Encode() {
+#ifdef TOPLING_KEY_FORMAT
+    size_t ksize = key_.size_;
+    size_t nzero = std::count(key_.begin(), key_.end(), 0);
+    size_t needed = key_.size_ + member_.size_
+                        + nzero + 2
+                        + sizeof(int32_t) * 1 + sizeof(uint64_t);
+#else
     size_t needed = key_.size() + member_.size()
                         + sizeof(int32_t) * 2 + sizeof(uint64_t);
+#endif
     char* dst = nullptr;
     if (needed <= sizeof(space_)) {
       dst = space_;
@@ -41,10 +51,15 @@ class ZSetsScoreKey {
       }
     }
     start_ = dst;
+#ifdef TOPLING_KEY_FORMAT
+    dst = encode_00_0n(key_.data_, key_.end(), dst, dst+ksize+nzero+2, 1);
+    ROCKSDB_VERIFY_EQ(size_t(dst-start_), ksize+nzero+2);
+#else
     EncodeFixed32(dst, key_.size());
     dst += sizeof(int32_t);
     memcpy(dst, key_.data(), key_.size());
     dst += key_.size();
+#endif
     EncodeFixed32(dst, version_);
     dst += sizeof(int32_t);
     const void* addr_score = reinterpret_cast<const void*>(&score_);

@@ -11,13 +11,15 @@
 #define BLACKWIDOW_PLATFORM_IS_LITTLE_ENDIAN (__BYTE_ORDER == __LITTLE_ENDIAN)
 #endif
 #include <string.h>
+#include <terark/util/memcmp_coding.hpp>
 
 namespace blackwidow {
 
 #define TOPLING_KEY_FORMAT
-char* encode_00_0n(const char* ibeg, const char* iend, char* obeg, char* oend, char out_end_mark);
-char* decode_00_0n(const char* ibeg, const char**ires, char* obeg, char* oend);
-const char* end_of_00_0n(const char* encoded);
+using terark::encode_00_0n;
+using terark::decode_00_0n;
+using terark::end_of_00_0n;
+
 
   static const bool kLittleEndian = BLACKWIDOW_PLATFORM_IS_LITTLE_ENDIAN;
 #undef BLACKWIDOW_PLATFORM_IS_LITTLE_ENDIAN
