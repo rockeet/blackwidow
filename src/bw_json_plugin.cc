@@ -327,7 +327,11 @@ struct DataFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
     else {
       std::unique_ptr<rocksdb::Iterator> iter((*fac.db_ptr_)->
             NewIterator(ReadOptions(), (*fac.cf_handles_ptr_)[0]));
-      iter->Seek(smallest_user_key);
+      Slice seek = smallest_user_key;
+      seek.size_ = end_of_00_0n(seek.data_) - seek.data_;
+      ROCKSDB_VERIFY_LT(seek.size_, smallest_user_key.size());
+      seek.size_ -= 2; // exclude ending 0n
+      iter->Seek(seek);
       hash_strmap<VersionTimestamp> ttlmap;
       std::string meta_value;
       while (iter->Valid()) {
@@ -338,6 +342,7 @@ struct DataFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
         auto& vt = ttlmap[k];
         vt.version = parsed_meta_value.version();
         vt.timestamp = parsed_meta_value.timestamp();
+        iter->Next();
       }
       int64_t unix_time;
       rocksdb::Env::Default()->GetCurrentTime(&unix_time);
