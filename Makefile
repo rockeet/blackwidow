@@ -125,7 +125,7 @@ endif
 endif
 LIBOUTPUT = ./lib
 dummy := $(shell mkdir -p $(LIBOUTPUT))
-LIBRARY = $(LIBOUTPUT)/${LIBNAME}.a
+LIBRARY = $(LIBOUTPUT)/${LIBNAME}.so
 
 .PHONY: clean dbg static_lib all example
 
@@ -143,7 +143,8 @@ example:
 
 $(LIBRARY): $(LIBOBJECTS)
 	$(AM_V_AR)rm -f $@
-	$(AM_V_at)$(AR) $(ARFLAGS) $@ $(LIBOBJECTS)
+	$(AM_V_at)#$(AR) $(ARFLAGS) $@ $(LIBOBJECTS)
+	$(AM_V_at)$(LD) -shared -fPIC -o $@ $(LIBOBJECTS) $(LDFLAGS)
 
 clean:
 	make -C ./examples clean
