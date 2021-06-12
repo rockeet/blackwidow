@@ -310,6 +310,17 @@ ZSetsScoreFilterFactory::CreateCompactionFilter(const CompactionFilterContext&) 
 
 DATA_IO_DUMP_RAW_MEM_E(VersionTimestamp);
 
+std::string decode_00_0n(Slice src) {
+  std::string dst(src.size(), '\0');
+  auto src_ptr = src.end();
+  auto dst_beg = &dst[0];
+  auto dst_end = &dst[0] + dst.size();
+  dst_end = decode_00_0n(src.begin(), &src_ptr, dst_beg, dst_end);
+  ROCKSDB_VERIFY_LE(size_t(src_ptr - src.begin()), src.size_);
+  dst.resize(dst_end - dst_beg);
+  return dst;
+}
+
 template<class ConcreteFactory, class ParsedMetaValue>
 struct DataFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
   std::string smallest_user_key, largest_user_key;
@@ -327,15 +338,13 @@ struct DataFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
     else {
       std::unique_ptr<rocksdb::Iterator> iter((*fac.db_ptr_)->
             NewIterator(ReadOptions(), (*fac.cf_handles_ptr_)[0]));
-      Slice seek = smallest_user_key;
-      seek.size_ = end_of_00_0n(seek.data_) - seek.data_;
-      ROCKSDB_VERIFY_LT(seek.size_, smallest_user_key.size());
-      seek.size_ -= 2; // exclude ending 0n
-      iter->Seek(seek);
+      std::string start = decode_00_0n(smallest_user_key);
+      std::string bound = decode_00_0n(largest_user_key);
+      iter->Seek(start);
       hash_strmap<VersionTimestamp> ttlmap;
       std::string meta_value;
       while (iter->Valid()) {
-        Slice k = iter->key(); if (largest_user_key < k) break;
+        Slice k = iter->key(); if (bound < k) break;
         Slice v = iter->value();
         meta_value.assign(v.data_, v.size_);
         ParsedMetaValue parsed_meta_value(&meta_value);
