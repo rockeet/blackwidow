@@ -647,7 +647,7 @@ Status RedisStrings::MSetnx(const std::vector<KeyValue>& kvs,
 Status RedisStrings::Set(const Slice& key,
                          const Slice& value) {
   StringsValue strings_value(value);
-  //ScopeRecordLock l(lock_mgr_, key);
+  ScopeRecordLock l(lock_mgr_, key);
   return db_->Put(default_write_options_, key, strings_value.Encode());
 }
 
@@ -733,7 +733,7 @@ Status RedisStrings::Setex(const Slice& key, const Slice& value, int32_t ttl) {
   }
   StringsValue strings_value(value);
   strings_value.SetRelativeTimestamp(ttl);
-  //ScopeRecordLock l(lock_mgr_, key);
+  ScopeRecordLock l(lock_mgr_, key);
   return db_->Put(default_write_options_, key, strings_value.Encode());
 }
 
@@ -809,7 +809,7 @@ Status RedisStrings::Setvx(const Slice& key,
 Status RedisStrings::Delvx(const Slice& key, const Slice& value, int32_t* ret) {
   *ret = 0;
   std::string old_value;
-  //ScopeRecordLock l(lock_mgr_, key);
+  ScopeRecordLock l(lock_mgr_, key);
   Status s = db_->Get(default_read_options_, key, &old_value);
   if (s.ok()) {
     ParsedStringsValue parsed_strings_value(&old_value);
@@ -1079,7 +1079,7 @@ Status RedisStrings::BitPos(const Slice& key, int32_t bit,
 
 Status RedisStrings::PKSetexAt(const Slice& key, const Slice& value, int32_t timestamp) {
   StringsValue strings_value(value);
-  //ScopeRecordLock l(lock_mgr_, key);
+  ScopeRecordLock l(lock_mgr_, key);
   strings_value.set_timestamp(timestamp);
   return db_->Put(default_write_options_, key, strings_value.Encode());
 }
@@ -1218,7 +1218,7 @@ Status RedisStrings::Expire(const Slice& key, int32_t ttl) {
     return db_->Delete(default_write_options_, key);
   }
   std::string value;
-  //ScopeRecordLock l(lock_mgr_, key);
+  ScopeRecordLock l(lock_mgr_, key);
   Status s = db_->Get(default_read_options_, key, &value);
   if (s.ok()) {
     ParsedStringsValue parsed_strings_value(&value);
@@ -1233,7 +1233,7 @@ Status RedisStrings::Expire(const Slice& key, int32_t ttl) {
 
 Status RedisStrings::Del(const Slice& key) {
   std::string value;
-  //ScopeRecordLock l(lock_mgr_, key);
+  ScopeRecordLock l(lock_mgr_, key);
   Status s = db_->Get(default_read_options_, key, &value);
   if (s.ok()) {
     ParsedStringsValue parsed_strings_value(&value);
@@ -1337,7 +1337,7 @@ Status RedisStrings::Expireat(const Slice& key, int32_t timestamp) {
     return db_->Delete(default_write_options_, key);
   }
   std::string value;
-  //ScopeRecordLock l(lock_mgr_, key);
+  ScopeRecordLock l(lock_mgr_, key);
   Status s = db_->Get(default_read_options_, key, &value);
   if (s.ok()) {
     ParsedStringsValue parsed_strings_value(&value);
@@ -1374,7 +1374,7 @@ Status RedisStrings::Persist(const Slice& key) {
 
 Status RedisStrings::TTL(const Slice& key, int64_t* timestamp) {
   std::string value;
-  //ScopeRecordLock l(lock_mgr_, key);
+  ScopeRecordLock l(lock_mgr_, key);
   Status s = db_->Get(default_read_options_, key, &value);
   if (s.ok()) {
     ParsedStringsValue parsed_strings_value(&value);
