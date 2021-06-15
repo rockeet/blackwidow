@@ -48,10 +48,10 @@ const std::string SETS_DB = "sets";
 const size_t BATCH_DELETE_LIMIT = 100;
 const size_t COMPACT_THRESHOLD_COUNT = 2000;
 
-using Options = rocksdb::Options;
-using BlockBasedTableOptions = rocksdb::BlockBasedTableOptions;
-using Status = rocksdb::Status;
-using Slice = rocksdb::Slice;
+using rocksdb::Options;
+using rocksdb::BlockBasedTableOptions;
+using rocksdb::Status;
+using rocksdb::Slice;
 
 class Mutex;
 class RedisStrings;
@@ -68,8 +68,8 @@ class LRUCache;
 
 struct BlackwidowOptions {
   std::string json_file;
-  rocksdb::Options options;
-  rocksdb::BlockBasedTableOptions table_options;
+  Options options;
+  BlockBasedTableOptions table_options;
   size_t block_cache_size;
   bool share_block_cache;
   size_t statistics_max_size;
