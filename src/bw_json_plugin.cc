@@ -5,7 +5,7 @@
 #include <rocksdb/env.h>
 #include <rocksdb/comparator.h>
 #include <rocksdb/compaction_filter.h>
-#include <utilities/json/json_plugin_factory.h>
+#include <topling/side_plugin_factory.h>
 #include "redis.h"
 #include "custom_comparator.h"
 #include "base_filter.h"

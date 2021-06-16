@@ -15,7 +15,7 @@
 #include "src/redis_zsets.h"
 #include "src/redis_hyperloglog.h"
 #include "src/lru_cache.h"
-#include "utilities/json/json_plugin_repo.h"
+#include "topling/side_plugin_repo.h"
 
 namespace blackwidow {
 

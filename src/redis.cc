@@ -4,7 +4,7 @@
 //  of patent rights can be found in the PATENTS file in the same directory.
 
 #include "src/redis.h"
-#include "utilities/json/json_plugin_repo.h"
+#include "topling/side_plugin_repo.h"
 
 namespace blackwidow {
 
