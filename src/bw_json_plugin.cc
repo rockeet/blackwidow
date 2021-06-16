@@ -24,40 +24,45 @@ ROCKSDB_REG_DEFAULT_CONS(ListsMetaFilterFactory, CompactionFilterFactory);
 ROCKSDB_REG_DEFAULT_CONS( StringsFilterFactory, CompactionFilterFactory);
 
 template<class Base>
-struct Tpl_FilterFactoryJS : public Base {
+struct FilterFac : public Base {
   std::string m_type;
   std::mutex m_mtx;
   const JsonPluginRepo* m_repo;
-  Tpl_FilterFactoryJS(const json& js, const JsonPluginRepo& repo) {
+  FilterFac(const json& js, const JsonPluginRepo& repo) {
     m_repo = &repo;
     std::string type;
     ROCKSDB_JSON_REQ_PROP(js, type);
     m_type = type;
   }
+  bool TrySetDBptr() {
+    std::lock_guard<std::mutex> lock(m_mtx);
+    if (!this->db_ptr_) {
+      DB_MultiCF* dbm = (*m_repo)[m_type];
+      if (dbm) {
+        this->db_ptr_ = &dbm->db;
+        this->cf_handles_ptr_ = &dbm->cf_handles;
+      }
+      else {
+        fprintf(stderr,
+            "INFO: DB(%s) is opening: %s::CreateCompactionFilter()\n",
+            m_type.c_str(), this->Name());
+        return false;
+      }
+    }
+    return true;
+  }
   virtual std::unique_ptr<rocksdb::CompactionFilter>
   CreateCompactionFilter(const rocksdb::CompactionFilter::Context& context)
   final {
     if (!IsCompactionWorker()) {
-      std::lock_guard<std::mutex> lock(m_mtx);
-      if (!this->db_ptr_) {
-        DB_MultiCF* dbm = (*m_repo)[m_type];
-        if (dbm) {
-          this->db_ptr_ = &dbm->db;
-          this->cf_handles_ptr_ = &dbm->cf_handles;
-        }
-        else {
-          fprintf(stderr,
-              "INFO: DB(%s) is opening: %s::CreateCompactionFilter()\n",
-              m_type.c_str(), this->Name());
-        }
-      }
+      TrySetDBptr();
     }
     return Base::CreateCompactionFilter(context);
   }
 };
-using   BaseDataFilterFactoryJS = Tpl_FilterFactoryJS<  BaseDataFilterFactory>;
-using  ListsDataFilterFactoryJS = Tpl_FilterFactoryJS< ListsDataFilterFactory>;
-using ZSetsScoreFilterFactoryJS = Tpl_FilterFactoryJS<ZSetsScoreFilterFactory>;
+using   BaseDataFilterFactoryJS = FilterFac<  BaseDataFilterFactory>;
+using  ListsDataFilterFactoryJS = FilterFac< ListsDataFilterFactory>;
+using ZSetsScoreFilterFactoryJS = FilterFac<ZSetsScoreFilterFactory>;
 ROCKSDB_REG_JSON_REPO_CONS(  "BaseDataFilterFactory",
                               BaseDataFilterFactoryJS, CompactionFilterFactory);
 ROCKSDB_REG_JSON_REPO_CONS( "ListsDataFilterFactory",
@@ -296,7 +301,8 @@ static std::unique_ptr<CompactionFilter> Tpl_ttlmapNewFilter(const Factory* fac)
     filter->ttlmap_ = &fac->ttlmap_;
     return std::unique_ptr<CompactionFilter>(filter);
   } else {
-    auto filter = new HosterFilter(*fac->db_ptr_, fac->cf_handles_ptr_);
+    DB** dbp = fac->db_ptr_;
+    auto filter = new HosterFilter(dbp ? *dbp : NULL, fac->cf_handles_ptr_);
     rocksdb::Env::Default()->GetCurrentTime(&filter->unix_time);
     return std::unique_ptr<CompactionFilter>(filter);
   }
@@ -382,7 +388,7 @@ struct DataFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
     }
     else {
       hash_strmap<VersionTimestamp> ttlmap;
-      if (fac.db_ptr_ && fac.cf_handles_ptr_) {
+      if (const_cast<ConcreteFactory&>(fac).TrySetDBptr()) {
         load_ttlmap(ttlmap, fac, *fac.db_ptr_, (*fac.cf_handles_ptr_)[0],
             smallest_user_key, largest_user_key, &DecodeVT<ParsedMetaValue>);
       }
@@ -411,7 +417,7 @@ struct DataFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
 };
 
 #define RegDataFilterFactorySerDe(Factory, Parsed) \
-using Factory##SerDe = DataFilterFactorySerDe<Factory, Parsed>; \
+using Factory##SerDe = DataFilterFactorySerDe<FilterFac<Factory>, Parsed>; \
 ROCKSDB_REG_JSON_REPO_CONS_3(#Factory, Factory##SerDe, \
                              SerDeFunc<CompactionFilterFactory>)
 
