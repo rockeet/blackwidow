@@ -78,6 +78,9 @@ class BaseDataFilter : public rocksdb::CompactionFilter {
   bool Filter(int level, const Slice& key,
               const rocksdb::Slice& value,
               std::string* new_value, bool* value_changed) const override {
+    if (nullptr == db_ || nullptr == cf_handles_ptr_) {
+      return false;
+    }
     ParsedBaseDataKey parsed_base_data_key(key, &parse_key_buf_);
     Trace("==========================START==========================");
     Trace("[DataFilter], key: %s, data = %s, version = %d",

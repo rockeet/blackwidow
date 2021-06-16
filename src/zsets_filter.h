@@ -34,6 +34,9 @@ class ZSetsScoreFilter : public rocksdb::CompactionFilter {
               const rocksdb::Slice& value,
               std::string* new_value,
               bool* value_changed) const override {
+    if (nullptr == db_ || nullptr == cf_handles_ptr_) {
+      return false;
+    }
     ParsedZSetsScoreKey parsed_zsets_score_key(key, &parse_key_buf_);
     Trace("==========================START==========================");
     Trace("[ScoreFilter], key: %s, score = %lf, member = %s, version = %d",

@@ -41,9 +41,15 @@ struct Tpl_FilterFactoryJS : public Base {
       std::lock_guard<std::mutex> lock(m_mtx);
       if (!this->db_ptr_) {
         DB_MultiCF* dbm = (*m_repo)[m_type];
-        ROCKSDB_VERIFY_F(nullptr != dbm, "type = %s", m_type.c_str());
-        this->db_ptr_ = &dbm->db;
-        this->cf_handles_ptr_ = &dbm->cf_handles;
+        if (dbm) {
+          this->db_ptr_ = &dbm->db;
+          this->cf_handles_ptr_ = &dbm->cf_handles;
+        }
+        else {
+          fprintf(stderr,
+              "INFO: DB(%s) is opening: %s::CreateCompactionFilter()\n",
+              m_type.c_str(), this->Name());
+        }
       }
     }
     return Base::CreateCompactionFilter(context);
@@ -311,6 +317,9 @@ ZSetsScoreFilterFactory::CreateCompactionFilter(const CompactionFilterContext&) 
 DATA_IO_DUMP_RAW_MEM_E(VersionTimestamp);
 
 std::string decode_00_0n(Slice src) {
+  if (src.empty()) {
+    return std::string(); // empty
+  }
   std::string dst(src.size(), '\0');
   auto src_ptr = src.end();
   auto dst_beg = &dst[0];
@@ -319,6 +328,42 @@ std::string decode_00_0n(Slice src) {
   ROCKSDB_VERIFY_LE(size_t(src_ptr - src.begin()), src.size_);
   dst.resize(dst_end - dst_beg);
   return dst;
+}
+
+template<class ParsedMetaValue>
+static VersionTimestamp DecodeVT(std::string* meta_value) {
+  ParsedMetaValue parsed_meta_value(meta_value);
+  VersionTimestamp vt;
+  vt.version = parsed_meta_value.version();
+  vt.timestamp = parsed_meta_value.timestamp();
+  return vt;
+}
+
+static
+void load_ttlmap(hash_strmap<VersionTimestamp>& ttlmap,
+                 const CompactionFilterFactory& fac,
+                 rocksdb::DB* db, ColumnFamilyHandle* cfh,
+                 Slice smallest_user_key, Slice largest_user_key,
+                 VersionTimestamp (*decode)(std::string*))
+{
+  std::unique_ptr<Iterator> iter(db->NewIterator(ReadOptions(), cfh));
+  const std::string start = decode_00_0n(smallest_user_key);
+  const std::string bound = decode_00_0n(largest_user_key);
+  fprintf(stderr, "INFO: %s.Serialize: start = %s, bound = %s\n",
+          fac.Name(), start.c_str(), bound.c_str());
+  if (start.empty()) {
+    iter->SeekToFirst();
+  } else {
+    iter->Seek(start);
+  }
+  std::string meta_value;
+  while (iter->Valid()) {
+    Slice k = iter->key(); if (!bound.empty() && bound < k) break;
+    Slice v = iter->value();
+    meta_value.assign(v.data_, v.size_);
+    ttlmap[k] = decode(&meta_value);
+    iter->Next();
+  }
 }
 
 template<class ConcreteFactory, class ParsedMetaValue>
@@ -336,22 +381,14 @@ struct DataFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
       // do nothing
     }
     else {
-      std::unique_ptr<rocksdb::Iterator> iter((*fac.db_ptr_)->
-            NewIterator(ReadOptions(), (*fac.cf_handles_ptr_)[0]));
-      std::string start = decode_00_0n(smallest_user_key);
-      std::string bound = decode_00_0n(largest_user_key);
-      iter->Seek(start);
       hash_strmap<VersionTimestamp> ttlmap;
-      std::string meta_value;
-      while (iter->Valid()) {
-        Slice k = iter->key(); if (bound < k) break;
-        Slice v = iter->value();
-        meta_value.assign(v.data_, v.size_);
-        ParsedMetaValue parsed_meta_value(&meta_value);
-        auto& vt = ttlmap[k];
-        vt.version = parsed_meta_value.version();
-        vt.timestamp = parsed_meta_value.timestamp();
-        iter->Next();
+      if (fac.db_ptr_ && fac.cf_handles_ptr_) {
+        load_ttlmap(ttlmap, fac, *fac.db_ptr_, (*fac.cf_handles_ptr_)[0],
+            smallest_user_key, largest_user_key, &DecodeVT<ParsedMetaValue>);
+      }
+      else {
+        // now it is in DB Open, do not load ttlmap
+        fprintf(stderr, "INFO: %s.Serialize: db is in opening\n", fac.Name());
       }
       int64_t unix_time;
       rocksdb::Env::Default()->GetCurrentTime(&unix_time);

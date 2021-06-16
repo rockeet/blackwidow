@@ -77,6 +77,9 @@ class ListsDataFilter : public rocksdb::CompactionFilter {
   bool Filter(int level, const rocksdb::Slice& key,
               const rocksdb::Slice& value,
               std::string* new_value, bool* value_changed) const override {
+    if (nullptr == db_ || nullptr == cf_handles_ptr_) {
+      return false;
+    }
     ParsedListsDataKey parsed_lists_data_key(key, &parse_key_buf_);
     Trace("==========================START==========================");
     Trace("[DataFilter], key: %s, index = %lu, data = %s, version = %d",
