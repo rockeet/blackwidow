@@ -53,8 +53,9 @@ size_t HandleTable<T1, T2>::TableSize() {
 
 template <typename T1, typename T2>
 LRUHandle<T1, T2>* HandleTable<T1, T2>::Lookup(const T1& key) {
-  if (table_.find(key) != table_.end()) {
-    return table_[key];
+  auto iter = table_.find(key);
+  if (table_.end() != iter) {
+    return iter->second;
   } else {
     return NULL;
   }
@@ -63,9 +64,10 @@ LRUHandle<T1, T2>* HandleTable<T1, T2>::Lookup(const T1& key) {
 template <typename T1, typename T2>
 LRUHandle<T1, T2>* HandleTable<T1, T2>::Remove(const T1& key) {
   LRUHandle<T1, T2>* old = NULL;
-  if (table_.find(key) != table_.end()) {
-    old = table_[key];
-    table_.erase(key);
+  auto iter = table_.find(key);
+  if (table_.end() != iter) {
+    old = iter->second;
+    table_.erase(iter);
   }
   return old;
 }
@@ -73,15 +75,11 @@ LRUHandle<T1, T2>* HandleTable<T1, T2>::Remove(const T1& key) {
 template <typename T1, typename T2>
 LRUHandle<T1, T2>* HandleTable<T1, T2>::Insert(const T1& key,
                                                LRUHandle<T1, T2>* const handle) {
-  LRUHandle<T1, T2>* old = NULL;
-  if (table_.find(key) != table_.end()) {
-    old = table_[key];
-    table_.erase(key);
-  }
-  table_.insert({key, handle});
+  LRUHandle<T1, T2>*& value_ref = table_[key];
+  LRUHandle<T1, T2>*  old = value_ref;
+  value_ref = handle;
   return old;
 }
-
 
 template <typename T1, typename T2>
 class LRUCache {

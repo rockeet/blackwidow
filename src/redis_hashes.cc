@@ -220,10 +220,9 @@ Status RedisHashes::HDel(const Slice& key,
   std::vector<std::string> filtered_fields;
   std::unordered_set<std::string> field_set;
   for (auto iter = fields.begin(); iter != fields.end(); ++iter) {
-    std::string field = *iter;
-    if (field_set.find(field) == field_set.end()) {
-      field_set.insert(field);
-      filtered_fields.push_back(*iter);
+    const std::string& field = *iter;
+    if (field_set.insert(field).second) {
+      filtered_fields.push_back(field);
     }
   }
 
@@ -597,9 +596,8 @@ Status RedisHashes::HMSet(const Slice& key,
   std::unordered_set<std::string> fields;
   std::vector<FieldValue> filtered_fvs;
   for (auto iter = fvs.rbegin(); iter != fvs.rend(); ++iter) {
-    std::string field = iter->field;
-    if (fields.find(field) == fields.end()) {
-      fields.insert(field);
+    const std::string& field = iter->field;
+    if (fields.insert(field).second) {
       filtered_fvs.push_back(*iter);
     }
   }

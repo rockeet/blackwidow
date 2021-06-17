@@ -133,26 +133,26 @@ Status LockMgr::Acquire(LockMapStripe* stripe,
 Status LockMgr::AcquireLocked(LockMapStripe* stripe,
                               const std::string& key) {
   Status result;
-  // Check if this key is already locked
-  if (stripe->keys.find(key) != stripe->keys.end()) {
-    // Lock already held
-      result = Status::Busy(Status::SubCode::kLockTimeout);
-  } else {  // Lock not held.
-    // Check lock limit
-    if (max_num_locks_ > 0 &&
-        lock_map_->lock_cnt.load(std::memory_order_acquire) >= max_num_locks_) {
+  // Check lock limit
+  if (max_num_locks_ > 0 &&
+      lock_map_->lock_cnt.load(std::memory_order_relaxed) >= max_num_locks_) {
+    if (stripe->keys.find(key) == stripe->keys.end())
       result = Status::Busy(Status::SubCode::kLockLimit);
-    } else {
-      // acquire lock
-      stripe->keys.insert(key);
-
+    else
+      result = Status::Busy(Status::SubCode::kLockTimeout);
+  }
+  else {
+    // Check if this key is already locked
+    if (!stripe->keys.insert(key).second) { // existed
+      // Lock already held
+        result = Status::Busy(Status::SubCode::kLockTimeout);
+    } else {  // Lock not held.
       // Maintain lock count if there is a limit on the number of locks
       if (max_num_locks_) {
         lock_map_->lock_cnt++;
       }
     }
   }
-
   return result;
 }
 
@@ -178,7 +178,7 @@ void LockMgr::UnLock(const std::string& key) {
   // Lock the mutex for the stripe that this key hashes to
   size_t stripe_num = lock_map_->GetStripe(key);
   assert(lock_map_->lock_map_stripes_.size() > stripe_num);
-  LockMapStripe* stripe = lock_map_->lock_map_stripes_.at(stripe_num);
+  LockMapStripe* stripe = lock_map_->lock_map_stripes_[stripe_num];
 
   stripe->stripe_mutex->Lock();
   UnLockKey(key, stripe);

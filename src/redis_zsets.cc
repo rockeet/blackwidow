@@ -344,8 +344,7 @@ Status RedisZSets::ZAdd(const Slice& key,
   std::unordered_set<std::string> unique;
   std::vector<ScoreMember> filtered_score_members;
   for (const auto& sm : score_members) {
-    if (unique.find(sm.member) == unique.end()) {
-      unique.insert(sm.member);
+    if (unique.insert(sm.member).second) {
       filtered_score_members.push_back(sm);
     }
   }
@@ -767,8 +766,7 @@ Status RedisZSets::ZRem(const Slice& key,
   std::unordered_set<std::string> unique;
   std::vector<std::string> filtered_members;
   for (const auto& member : members) {
-    if (unique.find(member) == unique.end()) {
-      unique.insert(member);
+    if (unique.insert(member).second) {
       filtered_members.push_back(member);
     }
   }
@@ -1203,9 +1201,9 @@ Status RedisZSets::ZUnionstore(const Slice& destination,
           ParsedZSetsScoreKey parsed_zsets_score_key(iter->key(), &parse_key_buf);
           sm.score = parsed_zsets_score_key.score();
           sm.member = parsed_zsets_score_key.member().ToString();
-          if (member_score_map.find(sm.member) == member_score_map.end()) {
+          const auto ib = member_score_map.insert({sm.member, 0.0});
+          if (ib.second) {
             score = weight * sm.score;
-            member_score_map[sm.member] = (score == -0.0) ? 0 : score;
           } else {
             score = member_score_map[sm.member];
             switch (agg) {
@@ -1213,8 +1211,8 @@ Status RedisZSets::ZUnionstore(const Slice& destination,
               case MIN: score  = std::min(score, weight * sm.score); break;
               case MAX: score  = std::max(score, weight * sm.score); break;
             }
-            member_score_map[sm.member] = (score == -0.0) ? 0 : score;
           }
+          ib.first->second = (score == -0.0) ? 0 : score;
         }
         delete iter;
       }

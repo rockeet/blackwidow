@@ -6,6 +6,7 @@
 #include "src/redis_sets.h"
 
 #include <map>
+#include <set>
 #include <memory>
 #include <random>
 #include <algorithm>
@@ -223,8 +224,7 @@ Status RedisSets::SAdd(const Slice& key,
   std::unordered_set<std::string> unique;
   std::vector<std::string> filtered_members;
   for (const auto& member : members) {
-    if (unique.find(member) == unique.end()) {
-      unique.insert(member);
+    if (unique.insert(member).second) {
       filtered_members.push_back(member);
     }
   }
@@ -935,8 +935,7 @@ Status RedisSets::SRandmember(const Slice& key, int32_t count,
           engine.seed(last_seed);
           last_seed = engine();
           uint32_t pos = last_seed % size;
-          if (unique.find(pos) == unique.end()) {
-            unique.insert(pos);
+          if (unique.insert(pos).second) {
             targets.push_back(pos);
           }
         }
@@ -1052,7 +1051,7 @@ Status RedisSets::SUnion(const std::vector<std::string>& keys,
   }
 
   Slice prefix;
-  std::map<std::string, bool> result_flag;
+  std::set<std::string> result_flag;
   std::string parse_key_buf;
   for (const auto& key_version : vaild_sets) {
     SetsMemberKey sets_member_key(key_version.key,
@@ -1064,9 +1063,8 @@ Status RedisSets::SUnion(const std::vector<std::string>& keys,
          iter->Next()) {
       ParsedSetsMemberKey parsed_sets_member_key(iter->key(), &parse_key_buf);
       std::string member = parsed_sets_member_key.member().ToString();
-      if (result_flag.find(member) == result_flag.end()) {
+      if (result_flag.insert(member).second) {
         members->push_back(member);
-        result_flag[member] = true;
       }
     }
     delete iter;
@@ -1108,7 +1106,7 @@ Status RedisSets::SUnionstore(const Slice& destination,
 
   Slice prefix;
   std::vector<std::string> members;
-  std::map<std::string, bool> result_flag;
+  std::set<std::string> result_flag;
   std::string parse_key_buf;
   for (const auto& key_version : vaild_sets) {
     SetsMemberKey sets_member_key(key_version.key,
@@ -1120,9 +1118,8 @@ Status RedisSets::SUnionstore(const Slice& destination,
          iter->Next()) {
       ParsedSetsMemberKey parsed_sets_member_key(iter->key(), &parse_key_buf);
       std::string member = parsed_sets_member_key.member().ToString();
-      if (result_flag.find(member) == result_flag.end()) {
+      if (result_flag.insert(member).second) {
         members.push_back(member);
-        result_flag[member] = true;
       }
     }
     delete iter;
