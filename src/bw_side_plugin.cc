@@ -346,29 +346,40 @@ static VersionTimestamp DecodeVT(std::string* meta_value) {
 
 static
 void load_ttlmap(hash_strmap<VersionTimestamp>& ttlmap,
+                 const std::string& type,
                  const CompactionFilterFactory& fac,
-                 rocksdb::DB* db, ColumnFamilyHandle* cfh,
+                 DB** dbpp, std::vector<ColumnFamilyHandle*>* cfh_vec,
                  Slice smallest_user_key, Slice largest_user_key,
                  VersionTimestamp (*decode)(std::string*))
 {
+  DB* db = *dbpp;
+  ColumnFamilyHandle* cfh = (*cfh_vec)[0];
   std::unique_ptr<Iterator> iter(db->NewIterator(ReadOptions(), cfh));
   const std::string start = decode_00_0n(smallest_user_key);
   const std::string bound = decode_00_0n(largest_user_key);
-  fprintf(stderr, "INFO: %s.Serialize: start = %s, bound = %s\n",
-          fac.Name(), start.c_str(), bound.c_str());
+  using namespace std::chrono;
+  auto t0 = steady_clock::now();
   if (start.empty()) {
     iter->SeekToFirst();
   } else {
     iter->Seek(start);
   }
   std::string meta_value;
+  size_t bytes = 0;
   while (iter->Valid()) {
     Slice k = iter->key(); if (!bound.empty() && bound < k) break;
     Slice v = iter->value();
     meta_value.assign(v.data_, v.size_);
     ttlmap[k] = decode(&meta_value);
+    bytes += k.size_ + 1; // 1 for key len byte, for simple, ignore len > 255
     iter->Next();
   }
+  bytes += sizeof(VersionTimestamp) * ttlmap.size();
+  auto t1 = steady_clock::now();
+  double d = duration_cast<microseconds>(t1-t0).count()/1e6;
+  fprintf(stderr,
+    "INFO: %8.4f sec %8.6f Mkv %9.6f MB, %s.%s.Serialize: start = %s, bound = %s\n",
+    d, ttlmap.size()/1e6, bytes/1e6, type.c_str(), fac.Name(), start.c_str(), bound.c_str());
 }
 
 template<class ConcreteFactory, class ParsedMetaValue>
@@ -388,7 +399,7 @@ struct DataFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
     else {
       hash_strmap<VersionTimestamp> ttlmap;
       if (const_cast<ConcreteFactory&>(fac).TrySetDBptr()) {
-        load_ttlmap(ttlmap, fac, *fac.db_ptr_, (*fac.cf_handles_ptr_)[0],
+        load_ttlmap(ttlmap, fac.m_type, fac, fac.db_ptr_, fac.cf_handles_ptr_,
             smallest_user_key, largest_user_key, &DecodeVT<ParsedMetaValue>);
       }
       else {
