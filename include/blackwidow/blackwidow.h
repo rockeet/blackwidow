@@ -24,12 +24,12 @@
 #include "slash/include/slash_mutex.h"
 
 namespace rocksdb {
-  class JsonPluginRepo;
+  class SidePluginRepo;
 }
 
 namespace blackwidow {
 
-using rocksdb::JsonPluginRepo;
+using rocksdb::SidePluginRepo;
 
 const double ZSET_SCORE_MAX = std::numeric_limits<double>::max();
 const double ZSET_SCORE_MIN = std::numeric_limits<double>::lowest();
@@ -1228,10 +1228,10 @@ class BlackWidow {
   Status SetOptions(const OptionType& option_type, const std::string& db_type,
                     const std::unordered_map<std::string, std::string>& options);
 
-  JsonPluginRepo* GetRepo() { return repo_.get(); }
+  SidePluginRepo* GetRepo() { return repo_.get(); }
  private:
   std::string json_file_;
-  std::shared_ptr<JsonPluginRepo> repo_;
+  std::shared_ptr<SidePluginRepo> repo_;
   RedisStrings* strings_db_;
   RedisHashes* hashes_db_;
   RedisSets* sets_db_;

@@ -110,7 +110,7 @@ Status BlackWidow::Open(const BlackwidowOptions& bw_options,
                         const std::string& db_path) {
   mkpath(db_path.c_str(), 0755);
   if (!bw_options.json_file.empty()) {
-    repo_ = std::make_shared<rocksdb::JsonPluginRepo>();
+    repo_ = std::make_shared<rocksdb::SidePluginRepo>();
     Status s = repo_->ImportJsonFile(bw_options.json_file);
     if (!s.ok()) {
       fprintf(stderr,

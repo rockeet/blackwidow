@@ -20,15 +20,14 @@ using namespace terark;
 
 ROCKSDB_REG_DEFAULT_CONS( BaseMetaFilterFactory, CompactionFilterFactory);
 ROCKSDB_REG_DEFAULT_CONS(ListsMetaFilterFactory, CompactionFilterFactory);
-
-ROCKSDB_REG_DEFAULT_CONS( StringsFilterFactory, CompactionFilterFactory);
+ROCKSDB_REG_DEFAULT_CONS(  StringsFilterFactory, CompactionFilterFactory);
 
 template<class Base>
 struct FilterFac : public Base {
   std::string m_type;
   std::mutex m_mtx;
-  const JsonPluginRepo* m_repo;
-  FilterFac(const json& js, const JsonPluginRepo& repo) {
+  const SidePluginRepo* m_repo;
+  FilterFac(const json& js, const SidePluginRepo& repo) {
     m_repo = &repo;
     std::string type;
     ROCKSDB_JSON_REQ_PROP(js, type);
@@ -60,24 +59,21 @@ struct FilterFac : public Base {
     return Base::CreateCompactionFilter(context);
   }
 };
-using   BaseDataFilterFactoryJS = FilterFac<  BaseDataFilterFactory>;
-using  ListsDataFilterFactoryJS = FilterFac< ListsDataFilterFactory>;
-using ZSetsScoreFilterFactoryJS = FilterFac<ZSetsScoreFilterFactory>;
-ROCKSDB_REG_JSON_REPO_CONS(  "BaseDataFilterFactory",
-                              BaseDataFilterFactoryJS, CompactionFilterFactory);
-ROCKSDB_REG_JSON_REPO_CONS( "ListsDataFilterFactory",
-                             ListsDataFilterFactoryJS, CompactionFilterFactory);
-ROCKSDB_REG_JSON_REPO_CONS("ZSetsScoreFilterFactory",
-                            ZSetsScoreFilterFactoryJS, CompactionFilterFactory);
+#define BW_RegFilterFac(Class) using Class##JS = FilterFac<Class>; \
+  ROCKSDB_REG_JSON_REPO_CONS(#Class, Class##JS, CompactionFilterFactory)
+
+BW_RegFilterFac(  BaseDataFilterFactory);
+BW_RegFilterFac( ListsDataFilterFactory);
+BW_RegFilterFac(ZSetsScoreFilterFactory);
 
 const rocksdb::Comparator*  ListsDataKeyComparator();
 const rocksdb::Comparator* ZSetsScoreKeyComparator();
 static const rocksdb::Comparator*
-JS_ListsDataKeyComparator(const json&, const JsonPluginRepo&) {
+JS_ListsDataKeyComparator(const json&, const SidePluginRepo&) {
   return ListsDataKeyComparator();
 }
 static const rocksdb::Comparator*
-JS_ZSetsScoreKeyComparator(const json&, const JsonPluginRepo&) {
+JS_ZSetsScoreKeyComparator(const json&, const SidePluginRepo&) {
   return ZSetsScoreKeyComparator();
 }
 
@@ -375,7 +371,7 @@ void load_ttlmap(hash_strmap<VersionTimestamp>& ttlmap,
 template<class ConcreteFactory, class ParsedMetaValue>
 struct DataFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
   std::string smallest_user_key, largest_user_key;
-  DataFilterFactorySerDe(const json& js, const JsonPluginRepo& repo) {
+  DataFilterFactorySerDe(const json& js, const SidePluginRepo& repo) {
     ROCKSDB_JSON_REQ_PROP(js, smallest_user_key);
     ROCKSDB_JSON_REQ_PROP(js, largest_user_key);
   }
