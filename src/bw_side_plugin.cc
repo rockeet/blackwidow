@@ -34,6 +34,9 @@ struct FilterFac : public Base {
     m_type = type;
   }
   bool TrySetDBptr() {
+    if (this->db_ptr_ && this->cf_handles_ptr_) {
+      return true;
+    }
     std::lock_guard<std::mutex> lock(m_mtx);
     if (!this->db_ptr_) {
       DB_MultiCF* dbm = (*m_repo)[m_type];
