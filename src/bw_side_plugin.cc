@@ -6,6 +6,13 @@
 #include <rocksdb/comparator.h>
 #include <rocksdb/compaction_filter.h>
 #include <topling/side_plugin_factory.h>
+/*
+#include "debug.h"
+#undef  Trace
+#undef  Debug
+#define Trace(M, ...) {}
+#define Debug(M, ...) {}
+*/
 #include "redis.h"
 #include "custom_comparator.h"
 #include "base_filter.h"
@@ -45,7 +52,8 @@ struct FilterFac : public Base {
         this->cf_handles_ptr_ = &dbm->cf_handles;
       }
       else {
-        fprintf(stderr,
+        if (SidePluginRepo::DebugLevel() >= 2)
+          fprintf(stderr,
             "INFO: DB(%s) is opening: %s::CreateCompactionFilter()\n",
             m_type.c_str(), this->Name());
         return false;
@@ -54,8 +62,7 @@ struct FilterFac : public Base {
     return true;
   }
   virtual std::unique_ptr<rocksdb::CompactionFilter>
-  CreateCompactionFilter(const rocksdb::CompactionFilter::Context& context)
-  final {
+  CreateCompactionFilter(const CompactionFilterContext& context) final {
     if (!IsCompactionWorker()) {
       TrySetDBptr();
     }
@@ -377,7 +384,8 @@ void load_ttlmap(hash_strmap<VersionTimestamp>& ttlmap,
   bytes += sizeof(VersionTimestamp) * ttlmap.size();
   auto t1 = steady_clock::now();
   double d = duration_cast<microseconds>(t1-t0).count()/1e6;
-  fprintf(stderr,
+  if (SidePluginRepo::DebugLevel() >= 2)
+   fprintf(stderr,
     "INFO: %8.4f sec %8.6f Mkv %9.6f MB, %s.%s.Serialize: start = %s, bound = %s\n",
     d, ttlmap.size()/1e6, bytes/1e6, type.c_str(), fac.Name(), start.c_str(), bound.c_str());
 }
@@ -404,12 +412,19 @@ struct DataFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
       }
       else {
         // now it is in DB Open, do not load ttlmap
-        fprintf(stderr, "INFO: %s.Serialize: db is in opening\n", fac.Name());
+        if (SidePluginRepo::DebugLevel() >= 2)
+          fprintf(stderr, "INFO: %s.Serialize: db is in opening\n", fac.Name());
       }
       int64_t unix_time;
       rocksdb::Env::Default()->GetCurrentTime(&unix_time);
+      auto pos0 = dio.tell();
       dio << unix_time;
       dio << ttlmap;
+      auto pos1 = dio.tell();
+      auto bytes = size_t(pos1-pos0);
+      if (SidePluginRepo::DebugLevel() >= 2)
+        fprintf(stderr, "INFO: %s.%s.Serialize: bytes = %zd\n",
+                fac.m_type.c_str(), fac.Name(), bytes);
     }
   }
   void DeSerialize(FILE* reader, CompactionFilterFactory* base)
@@ -417,8 +432,14 @@ struct DataFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
     auto fac = dynamic_cast<ConcreteFactory*>(base);
     if (IsCompactionWorker()) {
       LittleEndianDataInput<NonOwnerFileStream> dio(reader);
+      auto pos0 = dio.tell();
       dio >> fac->unix_time_;
       dio >> fac->ttlmap_;
+      auto pos1 = dio.tell();
+      auto bytes = size_t(pos1-pos0);
+      if (SidePluginRepo::DebugLevel() >= 2)
+        fprintf(stderr, "INFO: %s.%s.DeSerialize: bytes = %zd\n",
+                fac->m_type.c_str(), fac->Name(), bytes);
     }
     else {
       // do nothing
