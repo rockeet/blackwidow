@@ -6,6 +6,9 @@
 #include <rocksdb/comparator.h>
 #include <rocksdb/compaction_filter.h>
 #include <topling/side_plugin_factory.h>
+#include <dcompact/dcompact_executor.h>
+#include <boost/core/demangle.hpp>
+
 /*
 #include "debug.h"
 #undef  Trace
@@ -25,6 +28,18 @@ namespace blackwidow {
 using namespace rocksdb;
 using namespace terark;
 
+// prefix "%s" -- this "%s" is for following "", it is a placeholder
+// for empty __VA_ARGS__
+#define PrintLog(level, prefix, fmt, ...) \
+  do { if (SidePluginRepo::DebugLevel() >= level) \
+    fprintf(stderr, prefix "%s" fmt "\n", \
+            TERARK_PP_SmartForPrintf("", ## __VA_ARGS__)); \
+  } while (0)
+#define TRAC(...) PrintLog(4, "TRAC: ", __VA_ARGS__)
+#define DEBG(...) PrintLog(3, "DEBG: ", __VA_ARGS__)
+#define INFO(...) PrintLog(2, "INFO: ", __VA_ARGS__)
+#define WARN(...) PrintLog(1, "WARN: ", __VA_ARGS__)
+
 ROCKSDB_REG_DEFAULT_CONS( BaseMetaFilterFactory, CompactionFilterFactory);
 ROCKSDB_REG_DEFAULT_CONS(ListsMetaFilterFactory, CompactionFilterFactory);
 ROCKSDB_REG_DEFAULT_CONS(  StringsFilterFactory, CompactionFilterFactory);
@@ -34,6 +49,7 @@ struct FilterFac : public Base {
   std::string m_type;
   std::mutex m_mtx;
   const SidePluginRepo* m_repo;
+  using Base::Name;
   FilterFac(const json& js, const SidePluginRepo& repo) {
     m_repo = &repo;
     std::string type;
@@ -46,16 +62,19 @@ struct FilterFac : public Base {
     }
     std::lock_guard<std::mutex> lock(m_mtx);
     if (!this->db_ptr_) {
-      DB_MultiCF* dbm = (*m_repo)[m_type];
-      if (dbm) {
+      //DB_MultiCF* dbm = (*m_repo)[m_type]; // this line crashes gdb
+      DB_Ptr dbp(nullptr);
+      if (m_repo->Get(m_type, &dbp)) {
+        if (!(dbp.db && dbp.dbm)) {
+          INFO("DB(%s) is opening 1: %s::CreateCompactionFilter()", m_type, Name());
+          return false; // db is in opening
+        }
+        DB_MultiCF* dbm = dbp.dbm;
         this->db_ptr_ = &dbm->db;
         this->cf_handles_ptr_ = &dbm->cf_handles;
       }
       else {
-        if (SidePluginRepo::DebugLevel() >= 2)
-          fprintf(stderr,
-            "INFO: DB(%s) is opening: %s::CreateCompactionFilter()\n",
-            m_type.c_str(), this->Name());
+        INFO("DB(%s) is opening 2: %s::CreateCompactionFilter()", m_type, Name());
         return false;
       }
     }
@@ -384,18 +403,22 @@ void load_ttlmap(hash_strmap<VersionTimestamp>& ttlmap,
   bytes += sizeof(VersionTimestamp) * ttlmap.size();
   auto t1 = steady_clock::now();
   double d = duration_cast<microseconds>(t1-t0).count()/1e6;
-  if (SidePluginRepo::DebugLevel() >= 2)
-   fprintf(stderr,
-    "INFO: %8.4f sec %8.6f Mkv %9.6f MB, %s.%s.Serialize: start = %s, bound = %s\n",
+  INFO("%8.4f sec %8.6f Mkv %9.6f MB, %s.%s.Serialize: start = %s, bound = %s",
     d, ttlmap.size()/1e6, bytes/1e6, type.c_str(), fac.Name(), start.c_str(), bound.c_str());
 }
 
 template<class ConcreteFactory, class ParsedMetaValue>
 struct DataFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
   std::string smallest_user_key, largest_user_key;
+  int job_id;
   DataFilterFactorySerDe(const json& js, const SidePluginRepo& repo) {
-    ROCKSDB_JSON_REQ_PROP(js, smallest_user_key);
-    ROCKSDB_JSON_REQ_PROP(js, largest_user_key);
+    auto cp = JS_CompactionParamsDecodePtr(js);
+    smallest_user_key = cp->smallest_user_key;
+    largest_user_key = cp->largest_user_key;
+    job_id = cp->job_id;
+    DEBG("%s: job_id = %d, smallest_user_key = %s, largest_user_key = %s",
+        boost::core::demangle(typeid(DataFilterFactorySerDe).name()).c_str(),
+        cp->job_id, smallest_user_key.c_str(), largest_user_key.c_str());
   }
   void Serialize(FILE* output, const CompactionFilterFactory& base)
   const override {
@@ -412,8 +435,8 @@ struct DataFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
       }
       else {
         // now it is in DB Open, do not load ttlmap
-        if (SidePluginRepo::DebugLevel() >= 2)
-          fprintf(stderr, "INFO: %s.Serialize: db is in opening\n", fac.Name());
+        DEBG("job_id: %d: %s.%s.Serialize: db is in opening",
+              job_id, fac.m_type.c_str(), fac.Name());
       }
       int64_t unix_time;
       rocksdb::Env::Default()->GetCurrentTime(&unix_time);
@@ -422,9 +445,8 @@ struct DataFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
       dio << ttlmap;
       auto pos1 = dio.tell();
       auto bytes = size_t(pos1-pos0);
-      if (SidePluginRepo::DebugLevel() >= 2)
-        fprintf(stderr, "INFO: %s.%s.Serialize: bytes = %zd\n",
-                fac.m_type.c_str(), fac.Name(), bytes);
+      DEBG("job_id: %d: %s.%s.Serialize: bytes = %zd",
+            job_id, fac.m_type.c_str(), fac.Name(), bytes);
     }
   }
   void DeSerialize(FILE* reader, CompactionFilterFactory* base)
@@ -437,9 +459,8 @@ struct DataFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
       dio >> fac->ttlmap_;
       auto pos1 = dio.tell();
       auto bytes = size_t(pos1-pos0);
-      if (SidePluginRepo::DebugLevel() >= 2)
-        fprintf(stderr, "INFO: %s.%s.DeSerialize: bytes = %zd\n",
-                fac->m_type.c_str(), fac->Name(), bytes);
+      DEBG("job_id: %d: %s.%s.DeSerialize: bytes = %zd",
+            job_id, fac->m_type.c_str(), fac->Name(), bytes);
     }
     else {
       // do nothing
