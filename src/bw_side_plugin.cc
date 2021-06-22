@@ -372,6 +372,7 @@ static VersionTimestamp DecodeVT(std::string* meta_value) {
 
 static
 void load_ttlmap(hash_strmap<VersionTimestamp>& ttlmap,
+                 int job_id,
                  const std::string& type,
                  const CompactionFilterFactory& fac,
                  DB** dbpp, std::vector<ColumnFamilyHandle*>* cfh_vec,
@@ -403,12 +404,13 @@ void load_ttlmap(hash_strmap<VersionTimestamp>& ttlmap,
   bytes += sizeof(VersionTimestamp) * ttlmap.size();
   auto t1 = steady_clock::now();
   double d = duration_cast<microseconds>(t1-t0).count()/1e6;
-  INFO("%8.4f sec %8.6f Mkv %9.6f MB, %s.%s.Serialize: start = %s, bound = %s",
-    d, ttlmap.size()/1e6, bytes/1e6, type.c_str(), fac.Name(), start.c_str(), bound.c_str());
+  INFO("job_id: %d: %s.%s.Serialize: %8.4f sec %8.6f Mkv %9.6f MB, start = %s, bound = %s",
+        job_id, type, fac.Name(), d, ttlmap.size()/1e6, bytes/1e6, start, bound);
 }
 
-template<class ConcreteFactory, class ParsedMetaValue>
+template<class Factory, class ParsedMetaValue>
 struct DataFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
+  using ConcreteFactory = FilterFac<Factory>;
   std::string smallest_user_key, largest_user_key;
   int job_id;
   DataFilterFactorySerDe(const json& js, const SidePluginRepo& repo) {
@@ -416,7 +418,7 @@ struct DataFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
     smallest_user_key = cp->smallest_user_key;
     largest_user_key = cp->largest_user_key;
     job_id = cp->job_id;
-    DEBG("%s: job_id = %d, smallest_user_key = %s, largest_user_key = %s",
+    TRAC("%s: job_id = %d, smallest_user_key = %s, largest_user_key = %s",
         boost::core::demangle(typeid(DataFilterFactorySerDe).name()).c_str(),
         cp->job_id, smallest_user_key.c_str(), largest_user_key.c_str());
   }
@@ -430,7 +432,7 @@ struct DataFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
     else {
       hash_strmap<VersionTimestamp> ttlmap;
       if (const_cast<ConcreteFactory&>(fac).TrySetDBptr()) {
-        load_ttlmap(ttlmap, fac.m_type, fac, fac.db_ptr_, fac.cf_handles_ptr_,
+        load_ttlmap(ttlmap, job_id, fac.m_type, fac, fac.db_ptr_, fac.cf_handles_ptr_,
             smallest_user_key, largest_user_key, &DecodeVT<ParsedMetaValue>);
       }
       else {
@@ -443,10 +445,11 @@ struct DataFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
       auto pos0 = dio.tell();
       dio << unix_time;
       dio << ttlmap;
+      auto kvs = fac.ttlmap_.size();
       auto pos1 = dio.tell();
       auto bytes = size_t(pos1-pos0);
-      DEBG("job_id: %d: %s.%s.Serialize: bytes = %zd",
-            job_id, fac.m_type.c_str(), fac.Name(), bytes);
+      DEBG("job_id: %d: %s.%s.Serialize: kvs = %zd, bytes = %zd",
+            job_id, fac.m_type.c_str(), fac.Name(), kvs, bytes);
     }
   }
   void DeSerialize(FILE* reader, CompactionFilterFactory* base)
@@ -457,10 +460,11 @@ struct DataFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
       auto pos0 = dio.tell();
       dio >> fac->unix_time_;
       dio >> fac->ttlmap_;
+      auto kvs = fac->ttlmap_.size();
       auto pos1 = dio.tell();
       auto bytes = size_t(pos1-pos0);
-      DEBG("job_id: %d: %s.%s.DeSerialize: bytes = %zd",
-            job_id, fac->m_type.c_str(), fac->Name(), bytes);
+      DEBG("job_id: %d: %s.%s.DeSerialize: kvs = %zd, bytes = %zd",
+            job_id, fac->m_type.c_str(), fac->Name(), kvs, bytes);
     }
     else {
       // do nothing
@@ -469,7 +473,7 @@ struct DataFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
 };
 
 #define RegDataFilterFactorySerDe(Factory, Parsed) \
-using Factory##SerDe = DataFilterFactorySerDe<FilterFac<Factory>, Parsed>; \
+using Factory##SerDe = DataFilterFactorySerDe<Factory, Parsed>; \
 ROCKSDB_REG_JSON_REPO_CONS_3(#Factory, Factory##SerDe, \
                              SerDeFunc<CompactionFilterFactory>)
 
