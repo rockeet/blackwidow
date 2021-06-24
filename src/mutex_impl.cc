@@ -34,9 +34,9 @@ class CondVarImpl : public CondVar {
   CondVarImpl() {}
   ~CondVarImpl() {}
 
-  Status Wait(std::shared_ptr<Mutex> mutex) override;
+  Status Wait(const std::shared_ptr<Mutex>& mutex) override;
 
-  Status WaitFor(std::shared_ptr<Mutex> mutex,
+  Status WaitFor(const std::shared_ptr<Mutex>& mutex,
                  int64_t timeout_time) override;
 
   void Notify() override { cv_.notify_one(); }
@@ -87,7 +87,7 @@ Status MutexImpl::TryLockFor(int64_t timeout_time) {
 }
 
 Status CondVarImpl::Wait(
-    std::shared_ptr<Mutex> mutex) {
+    const std::shared_ptr<Mutex>& mutex) {
   auto mutex_impl = reinterpret_cast<MutexImpl*>(mutex.get());
 
   std::unique_lock<std::mutex> lock(mutex_impl->mutex_, std::adopt_lock);
@@ -100,7 +100,7 @@ Status CondVarImpl::Wait(
 }
 
 Status CondVarImpl::WaitFor(
-    std::shared_ptr<Mutex> mutex, int64_t timeout_time) {
+    const std::shared_ptr<Mutex>& mutex, int64_t timeout_time) {
   Status s;
 
   auto mutex_impl = reinterpret_cast<MutexImpl*>(mutex.get());
