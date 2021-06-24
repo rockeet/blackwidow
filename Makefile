@@ -1,7 +1,7 @@
 CLEAN_FILES = # deliberately empty, so we can append below.
 CXX=g++
 LDFLAGS= -lpthread -lrt
-CXXFLAGS += -g -std=gnu++17 -fno-builtin-memcmp -msse -msse4.2 -pipe -fPIC
+CXXFLAGS += -gdwarf -g3 -std=gnu++17 -fno-builtin-memcmp -msse -msse4.2 -pipe -fPIC
 PROFILING_FLAGS=-pg
 ARFLAGS = rs
 OPT=
@@ -18,7 +18,8 @@ endif
 # don't treat warnings as errors
 ifeq ($(DEBUG_LEVEL),0)
 DISABLE_WARNING_AS_ERROR=1
-OPT += -O2 -fno-omit-frame-pointer -DNDEBUG
+#OPT += -O2 -fno-omit-frame-pointer -DNDEBUG
+OPT += -O2 -DNDEBUG
 else
 $(warning Warning: Compiling in debug mode. Don't use the resulting binary in production)
 OPT += -O0 $(PROFILING_FLAGS)
