@@ -647,7 +647,7 @@ Status BlackWidow::ZRank(const Slice& key,
 }
 
 Status BlackWidow::ZRem(const Slice& key,
-                        std::vector<std::string> members,
+                        const std::vector<std::string>& members,
                         int32_t* ret) {
   return zsets_db_->ZRem(key, members, ret);
 }

@@ -876,7 +876,7 @@ class BlackWidow {
   //
   // An error is returned when key exists and does not hold a sorted set.
   Status ZRem(const Slice& key,
-              std::vector<std::string> members,
+              const std::vector<std::string>& members,
               int32_t* ret);
 
   // Removes all elements in the sorted set stored at key with rank between

@@ -759,7 +759,7 @@ Status RedisZSets::ZRank(const Slice& key,
 }
 
 Status RedisZSets::ZRem(const Slice& key,
-                        std::vector<std::string> members,
+                        const std::vector<std::string>& members,
                         int32_t* ret) {
   *ret = 0;
   uint32_t statistic = 0;

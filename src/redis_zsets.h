@@ -63,7 +63,7 @@ class RedisZSets : public Redis {
                const Slice& member,
                int32_t* rank);
   Status ZRem(const Slice& key,
-              std::vector<std::string> members,
+              const std::vector<std::string>& members,
               int32_t* ret);
   Status ZRemrangebyrank(const Slice& key,
                          int32_t start,
