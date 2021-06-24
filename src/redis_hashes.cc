@@ -889,7 +889,7 @@ Status RedisHashes::HScan(const Slice& key,
 }
 
 Status RedisHashes::HScanx(const Slice& key,
-                           const std::string start_field,
+                           const std::string& start_field,
                            const std::string& pattern,
                            int64_t count, std::vector<FieldValue>* field_values,
                            std::string* next_field) {
