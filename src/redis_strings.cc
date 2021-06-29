@@ -721,7 +721,7 @@ Status RedisStrings::SetBit(const Slice& key, int64_t offset,
       data_value.append(1, byte_val);
     }
     StringsValue strings_value(data_value);
-    return  db_->Put(rocksdb::WriteOptions(), key, strings_value.Encode());
+    return  db_->Put(default_write_options_, key, strings_value.Encode());
   } else {
     return s;
   }
