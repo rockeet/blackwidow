@@ -23,7 +23,7 @@ RedisStrings::RedisStrings(BlackWidow* const bw, const DataType& type)
 
 Status RedisStrings::Open(const BlackwidowOptions& bw_options,
     const std::string& db_path) {
-  if (!bw_options.json_file.empty()) {
+  if (!bw_options.sideplugin_conf.empty()) {
     return OpenByRepo(bw_options, db_path, "strings");
   }
   rocksdb::Options ops(bw_options.options);

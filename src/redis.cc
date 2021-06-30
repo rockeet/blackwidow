@@ -36,7 +36,7 @@ Redis::~Redis() {
 
 Status Redis::OpenByRepo(const BlackwidowOptions& bw_options,
                          const std::string& db_path, const std::string& type) {
-  ROCKSDB_VERIFY(!bw_options.json_file.empty());
+  ROCKSDB_VERIFY(!bw_options.sideplugin_conf.empty());
   ROCKSDB_VERIFY(bw_->GetRepo() != nullptr);
   rocksdb::DB_MultiCF* dbm = nullptr;
   Status s = bw_->GetRepo()->OpenDB(type, &dbm);

@@ -31,7 +31,7 @@ Status RedisZSets::Open(const BlackwidowOptions& bw_options,
                         const std::string& db_path) {
   statistics_store_->SetCapacity(bw_options.statistics_max_size);
   small_compaction_threshold_ = bw_options.small_compaction_threshold;
-  if (!bw_options.json_file.empty()) {
+  if (!bw_options.sideplugin_conf.empty()) {
     return OpenByRepo(bw_options, db_path, "zsets");
   }
 

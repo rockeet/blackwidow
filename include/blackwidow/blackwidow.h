@@ -67,7 +67,7 @@ template <typename T1, typename T2>
 class LRUCache;
 
 struct BlackwidowOptions {
-  std::string json_file;
+  std::string sideplugin_conf;
   Options options;
   BlockBasedTableOptions table_options;
   size_t block_cache_size;
@@ -1230,7 +1230,7 @@ class BlackWidow {
 
   SidePluginRepo* GetRepo() { return repo_.get(); }
  private:
-  std::string json_file_;
+  std::string sideplugin_conf_;
   std::shared_ptr<SidePluginRepo> repo_;
   RedisStrings* strings_db_;
   RedisHashes* hashes_db_;

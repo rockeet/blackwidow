@@ -84,7 +84,7 @@ BlackWidow::~BlackWidow() {
     fprintf(stderr, "pthread_join failed with bgtask thread error %d\n", ret);
   }
 
-  if (!json_file_.empty()) {
+  if (!sideplugin_conf_.empty()) {
     repo_->CloseAllDB();
     return;
   }
@@ -109,15 +109,15 @@ static std::string AppendSubDirectory(const std::string& db_path,
 Status BlackWidow::Open(const BlackwidowOptions& bw_options,
                         const std::string& db_path) {
   mkpath(db_path.c_str(), 0755);
-  if (!bw_options.json_file.empty()) {
+  if (!bw_options.sideplugin_conf.empty()) {
     repo_ = std::make_shared<rocksdb::SidePluginRepo>();
-    Status s = repo_->ImportJsonFile(bw_options.json_file);
+    Status s = repo_->ImportAutoFile(bw_options.sideplugin_conf);
     if (!s.ok()) {
       fprintf(stderr,
-          "[FATAL] ImportJsonFile failed: %s\n", s.ToString().c_str());
+          "[FATAL] ImportAutoFile failed: %s\n", s.ToString().c_str());
       exit(-1);
     }
-    json_file_ = bw_options.json_file;
+    sideplugin_conf_ = bw_options.sideplugin_conf;
   }
   strings_db_ = new RedisStrings(this, kStrings);
   Status s = strings_db_->Open(
@@ -160,7 +160,7 @@ Status BlackWidow::Open(const BlackwidowOptions& bw_options,
     exit(-1);
   }
   is_opened_.store(true);
-  if (!bw_options.json_file.empty()) {
+  if (!bw_options.sideplugin_conf.empty()) {
     s = repo_->StartHttpServer();
     if (!s.ok()) {
       fprintf(stderr,
