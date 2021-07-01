@@ -1,4 +1,3 @@
-CXX=g++
 CXXFLAGS= -g -std=c++11 -fno-builtin-memcmp -msse -msse4.2
 OPT=
 

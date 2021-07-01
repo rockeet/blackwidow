@@ -1,4 +1,3 @@
-CXX=g++
 LDFLAGS= -lpthread -lrt -lsnappy -lz -lbz2
 CXXFLAGS=-O2 -std=c++11 -fno-builtin-memcmp -msse -msse4.2
 
