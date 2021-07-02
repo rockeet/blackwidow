@@ -413,14 +413,16 @@ struct DataFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
   using ConcreteFactory = FilterFac<Factory>;
   std::string smallest_user_key, largest_user_key;
   int job_id;
+  size_t rawzip[2];
   DataFilterFactorySerDe(const json& js, const SidePluginRepo& repo) {
     auto cp = JS_CompactionParamsDecodePtr(js);
     smallest_user_key = cp->smallest_user_key;
     largest_user_key = cp->largest_user_key;
     job_id = cp->job_id;
-    TRAC("%s: job_id = %d, smallest_user_key = %s, largest_user_key = %s",
+    cp->InputBytes(rawzip);
+    TRAC("%s: job_id = %d, smallest_user_key = %s, largest_user_key = %s, job raw = %.3f GB, zip = %.3f GB",
         boost::core::demangle(typeid(DataFilterFactorySerDe).name()).c_str(),
-        cp->job_id, smallest_user_key.c_str(), largest_user_key.c_str());
+        cp->job_id, smallest_user_key.c_str(), largest_user_key.c_str(), rawzip[0]/1e9, rawzip[1]/1e9);
   }
   void Serialize(FILE* output, const CompactionFilterFactory& base)
   const override {
@@ -445,11 +447,11 @@ struct DataFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
       auto pos0 = dio.tell();
       dio << unix_time;
       dio << ttlmap;
-      auto kvs = fac.ttlmap_.size();
+      auto kvs = ttlmap.size();
       auto pos1 = dio.tell();
       auto bytes = size_t(pos1-pos0);
-      DEBG("job_id: %d: %s.%s.Serialize: kvs = %zd, bytes = %zd",
-            job_id, fac.m_type.c_str(), fac.Name(), kvs, bytes);
+      DEBG("job_id: %d: %s.%s.Serialize: kvs = %zd, bytes = %zd, job raw = %.3f GB, zip = %.3f GB",
+            job_id, fac.m_type.c_str(), fac.Name(), kvs, bytes, rawzip[0]/1e9, rawzip[1]/1e9);
     }
   }
   void DeSerialize(FILE* reader, CompactionFilterFactory* base)
