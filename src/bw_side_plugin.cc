@@ -482,4 +482,32 @@ RegDataFilterFactorySerDe(ListsDataFilterFactory, ParsedListsMetaValue);
 RegDataFilterFactorySerDe(ZSetsScoreFilterFactory, ParsedZSetsMetaValue);
 
 
+struct HtmlTextDecode : public UserKeyCoder {
+  void Update(const json&, const SidePluginRepo&) override {
+  }
+  std::string ToString(const json&, const SidePluginRepo&) const override {
+    return "This is the HtmlTextDecode.";
+  }
+  void Encode(Slice, std::string*) const override {
+    assert(!"Unexpected call");
+    THROW_InvalidArgument("Unexpected call");
+  }
+  void Decode(Slice coded, std::string* de) const override {
+    std::string tmp_s;
+    blackwidow::ParsedBaseDataKey tmp_p(coded, &tmp_s);
+    auto k = tmp_p.key();
+    auto d = tmp_p.data();
+    de->clear();
+    de->reserve(coded.size_);
+    HtmlAppendEscape(de, k.data(), k.size());
+    de->append(":");
+    de->append(std::to_string(tmp_p.version()));
+    de->append(":");
+    HtmlAppendEscape(de, d.data(), d.size());
+  }
+};
+ROCKSDB_REG_DEFAULT_CONS(HtmlTextDecode, AnyPlugin);
+ROCKSDB_REG_AnyPluginManip("HtmlTextDecode");
+
+
 } // namespace blackwidow
