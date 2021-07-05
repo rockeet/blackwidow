@@ -610,7 +610,7 @@ struct ZSetsScoreKeyDecoder : public UserKeyCoder {
     de->append(":");
     de->append(v);
     de->append(":");
-    de->append(s)
+    de->append(s);
     de->append(":");
     HtmlAppendEscape(de, m.data(), m.size());
   }
