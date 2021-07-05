@@ -497,7 +497,7 @@ struct HashesDataKeyDecoder : public UserKeyCoder {
   }
   void Decode(Slice coded, std::string* de) const override {
     std::string tmp_s;
-    blackwidow::ParsedBaseDataKey tmp_p(coded, &tmp_s);
+    blackwidow::ParsedHashesDataKey tmp_p(coded, &tmp_s);
     auto k = tmp_p.key();
     auto v = std::to_string(tmp_p.version());
     auto d = tmp_p.data();
@@ -531,7 +531,7 @@ struct SetsDataKeyDecoder : public UserKeyCoder {
   }
   void Decode(Slice coded, std::string* de) const override {
     std::string tmp_s;
-    blackwidow::ParsedBaseDataKey tmp_p(coded, &tmp_s);
+    blackwidow::ParsedSetsMemberKey tmp_p(coded, &tmp_s);
     auto k = tmp_p.key();
     auto v = std::to_string(tmp_p.version());
     auto d = tmp_p.data();
@@ -564,7 +564,7 @@ struct ZSetsDataKeyDecoder : public UserKeyCoder {
   }
   void Decode(Slice coded, std::string* de) const override {
     std::string tmp_s;
-    blackwidow::ParsedBaseDataKey tmp_p(coded, &tmp_s);
+    blackwidow::ParsedZSetsMemberKey tmp_p(coded, &tmp_s);
     auto k = tmp_p.key();
     auto v = std::to_string(tmp_p.version());
     auto d = tmp_p.data();
