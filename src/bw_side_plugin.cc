@@ -506,9 +506,9 @@ struct HashesDataKeyDecoder : public UserKeyCoder {
     de->reserve(k.size() + 1 + v.size() + 1 + d.size());
 
     HtmlAppendEscape(de, k.data(), k.size());
-    de->append(":");
+    de->append("<font color=red>:</font>");
     de->append(v);
-    de->append(":");
+    de->append("<font color=red>:</font>");
     HtmlAppendEscape(de, d.data(), d.size());
   }
 };
@@ -540,9 +540,9 @@ struct SetsDataKeyDecoder : public UserKeyCoder {
     de->reserve(k.size() + 1 + v.size() + 1 + d.size());
 
     HtmlAppendEscape(de, k.data(), k.size());
-    de->append(":");
+    de->append("<font color=red>:</font>");
     de->append(v);
-    de->append(":");
+    de->append("<font color=red>:</font>");
     HtmlAppendEscape(de, d.data(), d.size());
   }
 };
@@ -573,9 +573,9 @@ struct ZSetsDataKeyDecoder : public UserKeyCoder {
     de->reserve(k.size() + 1 + v.size() + 1 + d.size());
 
     HtmlAppendEscape(de, k.data(), k.size());
-    de->append(":");
+    de->append("<font color=red>:</font>");
     de->append(v);
-    de->append(":");
+    de->append("<font color=red>:</font>");
     HtmlAppendEscape(de, d.data(), d.size());
   }
 };
@@ -607,11 +607,11 @@ struct ZSetsScoreKeyDecoder : public UserKeyCoder {
     de->reserve(k.size() + 1 + v.size() + 1 + s.size() + 1 + m.size());
 
     HtmlAppendEscape(de, k.data(), k.size());
-    de->append(":");
+    de->append("<font color=red>:</font>");
     de->append(v);
-    de->append(":");
+    de->append("<font color=red>:</font>");
     de->append(s);
-    de->append(":");
+    de->append("<font color=red>:</font>");
     HtmlAppendEscape(de, m.data(), m.size());
   }
 };
@@ -642,9 +642,9 @@ struct ListsDataKeyDecoder : public UserKeyCoder {
     de->reserve(coded.size_);
 
     HtmlAppendEscape(de, k.data(), k.size());
-    de->append(":");
+    de->append("<font color=red>:</font>");
     de->append(v);
-    de->append(":");
+    de->append("<font color=red>:</font>");
     de->append(i);
   }
 };
