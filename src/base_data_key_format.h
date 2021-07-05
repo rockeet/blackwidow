@@ -10,6 +10,8 @@
 
 namespace blackwidow {
 
+std::string decode_00_0n(Slice src);
+
 class BaseDataKey {
  public:
   BaseDataKey(const Slice& key, int32_t version, const Slice& data) :

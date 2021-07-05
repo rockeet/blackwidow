@@ -44,6 +44,10 @@ ROCKSDB_REG_DEFAULT_CONS( BaseMetaFilterFactory, CompactionFilterFactory);
 ROCKSDB_REG_DEFAULT_CONS(ListsMetaFilterFactory, CompactionFilterFactory);
 ROCKSDB_REG_DEFAULT_CONS(  StringsFilterFactory, CompactionFilterFactory);
 
+BaseDataFilter::~BaseDataFilter() {
+  delete iter_;
+}
+
 template<class Base>
 struct FilterFac : public Base {
   std::string m_type;

@@ -66,9 +66,10 @@ class BaseMetaFilterFactory : public rocksdb::CompactionFilterFactory {
 
 class BaseDataFilter : public rocksdb::CompactionFilter {
  public:
+  ~BaseDataFilter();
   BaseDataFilter(rocksdb::DB* db,
                  std::vector<rocksdb::ColumnFamilyHandle*>* cf_handles_ptr) :
-    db_(db),
+    db_(db), iter_(nullptr),
     cf_handles_ptr_(cf_handles_ptr),
     cur_key_(""),
     meta_not_found_(false),
@@ -95,8 +96,30 @@ class BaseDataFilter : public rocksdb::CompactionFilter {
       if (cf_handles_ptr_->size() == 0) {
         return false;
       }
+    #if 1
+      std::string meta_key = decode_00_0n(key);
+      if (!iter_) {
+        iter_ = db_->NewIterator(default_read_options_, (*cf_handles_ptr_)[0]);
+        ROCKSDB_VERIFY(nullptr != iter);
+        iter_->Seek(meta_key);
+      }
+      else if (!meta_not_found_) { // prev is found, needs move forward
+        iter_->Next();
+      }
+      Status s;
+      if (!iter_->Valid()) {
+        s = Status::NotFound("iter_->Valid() is false");
+      }
+      else if (iter_->key() != meta_key) {
+        s = Status::NotFound("iter_->key() != meta_key");
+      }
+      else {
+        meta_value = iter_->value().ToString();
+      }
+    #else
       Status s = db_->Get(default_read_options_,
               (*cf_handles_ptr_)[0], cur_key_, &meta_value);
+    #endif
       if (s.ok()) {
         meta_not_found_ = false;
         ParsedBaseMetaValue parsed_base_meta_value(&meta_value);
@@ -135,6 +158,7 @@ class BaseDataFilter : public rocksdb::CompactionFilter {
   const char* Name() const override { return "BaseDataFilter"; }
 
   rocksdb::DB* db_;
+  mutable rocksdb::Iterator* iter_;
   std::vector<rocksdb::ColumnFamilyHandle*>* cf_handles_ptr_;
   rocksdb::ReadOptions default_read_options_;
   mutable std::string parse_key_buf_;
