@@ -488,8 +488,8 @@ struct HashesDataKeyDecoder : public UserKeyCoder {
   void Update(const json&, const SidePluginRepo&) override {
   }
   std::string ToString(const json&, const SidePluginRepo&) const override {
-    return "This is the HashesDataKeyDecoder.<br/> \
-            The format is key:version:data.";
+    return "This is the HashesDataKeyDecoder.<br/>"
+           "The format is key:version:data.";
   }
   void Encode(Slice, std::string*) const override {
     assert(!"Unexpected call");
@@ -522,8 +522,8 @@ struct SetsDataKeyDecoder : public UserKeyCoder {
   void Update(const json&, const SidePluginRepo&) override {
   }
   std::string ToString(const json&, const SidePluginRepo&) const override {
-    return "This is the SetsDataKeyDecoder.<br/> \
-            The format is key:version:data.";
+    return "This is the SetsDataKeyDecoder.<br/>"
+           "The format is key:version:data.";
   }
   void Encode(Slice, std::string*) const override {
     assert(!"Unexpected call");
@@ -555,8 +555,8 @@ struct ZSetsDataKeyDecoder : public UserKeyCoder {
   void Update(const json&, const SidePluginRepo&) override {
   }
   std::string ToString(const json&, const SidePluginRepo&) const override {
-    return "This is the ZSetsDataKeyDecoder.<br/> \
-            The format is key:version:data.";
+    return "This is the ZSetsDataKeyDecoder.<br/>"
+           "The format is key:version:data.";
   }
   void Encode(Slice, std::string*) const override {
     assert(!"Unexpected call");
@@ -588,8 +588,8 @@ struct ZSetsScoreKeyDecoder : public UserKeyCoder {
   void Update(const json&, const SidePluginRepo&) override {
   }
   std::string ToString(const json&, const SidePluginRepo&) const override {
-    return "This is the ZSetsScoreKeyDecoder.<br/> \
-            The format is key:version:score:member.";
+    return "This is the ZSetsScoreKeyDecoder.<br/>"
+           "The format is key:version:score:member.";
   }
   void Encode(Slice, std::string*) const override {
     assert(!"Unexpected call");
@@ -624,8 +624,8 @@ struct ListsDataKeyDecoder : public UserKeyCoder {
   void Update(const json&, const SidePluginRepo&) override {
   }
   std::string ToString(const json&, const SidePluginRepo&) const override {
-    return "This is the ListsDataKeyDecoder. <br/> \
-            The format is key:version:index.";
+    return "This is the ListsDataKeyDecoder.<br/>"
+           "The format is key:version:index.";
   }
   void Encode(Slice, std::string*) const override {
     assert(!"Unexpected call");
