@@ -584,6 +584,42 @@ ROCKSDB_REG_AnyPluginManip("ZSetsDataKeyDecoder");
 
 
 
+struct ZSetsScoreKeyDecoder : public UserKeyCoder {
+  void Update(const json&, const SidePluginRepo&) override {
+  }
+  std::string ToString(const json&, const SidePluginRepo&) const override {
+    return "This is the ZSetsScoreKeyDecoder.<br/> \
+            The format is key:version:score:member.";
+  }
+  void Encode(Slice, std::string*) const override {
+    assert(!"Unexpected call");
+    THROW_InvalidArgument("Unexpected call");
+  }
+  void Decode(Slice coded, std::string* de) const override {
+    std::string tmp_s;
+    blackwidow::ParsedZSetsScoreKey tmp_p(coded, &tmp_s);
+    auto k = tmp_p.key();
+    auto v = std::to_string(tmp_p.version());
+    auto s = std::to_string(tmp_p.score());
+    auto m = tmp_p.member();
+
+    de->clear();
+    de->reserve(k.size() + 1 + v.size() + 1 + s.size() + 1 + m.size());
+
+    HtmlAppendEscape(de, k.data(), k.size());
+    de->append(":");
+    de->append(v);
+    de->append(":");
+    de->append(s)
+    de->append(":");
+    HtmlAppendEscape(de, m.data(), m.size());
+  }
+};
+ROCKSDB_REG_DEFAULT_CONS(ZSetsScoreKeyDecoder, AnyPlugin);
+ROCKSDB_REG_AnyPluginManip("ZSetsScoreKeyDecoder");
+
+
+
 struct ListsDataKeyDecoder : public UserKeyCoder {
   void Update(const json&, const SidePluginRepo&) override {
   }
