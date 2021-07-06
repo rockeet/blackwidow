@@ -9,7 +9,6 @@
 #include <string>
 #include <memory>
 #include <vector>
-#include <terark/hash_strmap.hpp>
 
 #include "src/debug.h"
 #include "src/lists_meta_value_format.h"
@@ -135,6 +134,8 @@ class ListsDataFilter : public rocksdb::CompactionFilter {
   const char* Name() const override { return "ListsDataFilter"; }
 
   rocksdb::DB* db_;
+  mutable rocksdb::Iterator* iter_ = nullptr;
+  mutable uint64_t smallest_seqno_;
   std::vector<rocksdb::ColumnFamilyHandle*>* cf_handles_ptr_;
   rocksdb::ReadOptions default_read_options_;
   mutable std::string parse_key_buf_;
@@ -160,7 +161,7 @@ class ListsDataFilterFactory : public rocksdb::CompactionFilterFactory {
   rocksdb::DB** db_ptr_;
   std::vector<rocksdb::ColumnFamilyHandle*>* cf_handles_ptr_;
   int64_t unix_time_;
-  terark::hash_strmap<VersionTimestamp> ttlmap_; // only used by compact worker
+  size_t meta_ttl_num_;
 };
 
 }  //  namespace blackwidow

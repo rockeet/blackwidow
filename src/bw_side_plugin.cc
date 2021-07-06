@@ -1,6 +1,8 @@
 #include <mutex>
 #include <terark/io/DataIO.hpp>
 #include <terark/io/FileStream.hpp>
+#include <terark/io/StreamBuffer.hpp>
+#include <terark/util/process.hpp>
 #include <rocksdb/db.h>
 #include <rocksdb/env.h>
 #include <rocksdb/comparator.h>
@@ -22,6 +24,10 @@
 #include "lists_filter.h"
 #include "zsets_filter.h"
 #include "strings_filter.h"
+
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 namespace blackwidow {
 
@@ -53,6 +59,7 @@ struct FilterFac : public Base {
   std::string m_type;
   std::mutex m_mtx;
   const SidePluginRepo* m_repo;
+  const CompactionParams* m_cp = nullptr;
   using Base::Name;
   FilterFac(const json& js, const SidePluginRepo& repo) {
     m_repo = &repo;
@@ -84,13 +91,8 @@ struct FilterFac : public Base {
     }
     return true;
   }
-  virtual std::unique_ptr<rocksdb::CompactionFilter>
-  CreateCompactionFilter(const CompactionFilterContext& context) final {
-    if (!IsCompactionWorker()) {
-      TrySetDBptr();
-    }
-    return Base::CreateCompactionFilter(context);
-  }
+  virtual std::unique_ptr<CompactionFilter>
+  CreateCompactionFilter(const CompactionFilterContext&) final;
 };
 #define BW_RegFilterFac(Class) using Class##JS = FilterFac<Class>; \
   ROCKSDB_REG_JSON_REPO_CONS(#Class, Class##JS, CompactionFilterFactory)
@@ -174,6 +176,89 @@ RegSimpleFilterFactorySerDe(BaseMetaFilterFactory);
 RegSimpleFilterFactorySerDe(ListsMetaFilterFactory);
 RegSimpleFilterFactorySerDe(StringsFilterFactory);
 
+DATA_IO_DUMP_RAW_MEM_E(VersionTimestamp);
+
+using std::string;
+string GetDirFromEnv(const char* name, const char* Default) {
+  string dir = getEnvStr(name, Default);
+  if (!dir.empty() && '/' != dir.back()) {
+    dir.push_back('/');
+  }
+  return dir;
+}
+
+bool ReplacePrefix(Slice Old, Slice New, Slice str, string* res) {
+  if (Old.size_ && Old.data_[Old.size_-1] == '/') {
+    if (terark::fstring(Old).notail(1) == str) {
+      res->assign(New.data_, New.size_);
+      return true;
+    }
+  }
+  if (str.starts_with(Old)) {
+    size_t suffixLen = str.size_ - Old.size_;
+    res->reserve(New.size_ + suffixLen);
+    res->assign(New.data_, New.size_);
+    res->append(str.data_ + Old.size_, suffixLen);
+    return true;
+  }
+  return false;
+}
+
+string ReplacePrefix(Slice Old, Slice New, Slice str) {
+  string res;
+  if (ReplacePrefix(Old, New, str, &res)) {
+    return res;
+  }
+  THROW_STD(invalid_argument,
+            "str = '%s' does not start with Old='%s'",
+            str.data(), Old.data());
+}
+
+string MakePath(string dir, Slice sub) {
+  if ('/' != dir.back()) {
+    dir.push_back('/');
+  }
+  dir.append(sub.data(), sub.size());
+  return dir;
+}
+
+struct TTL_StreamReader {
+  //OsFileStream m_file;
+  ProcPipeStream m_file;
+  size_t meta_ttl_num_ = 0;
+  size_t meta_ttl_idx_ = 0;
+  LittleEndianDataInput<InputBuffer> m_reader;
+  std::string mk_from_meta; // mk_ means (meta key)
+  VersionTimestamp vt;
+  bool ReadUntil(const std::string& mk_from_data) {
+    int c = -1;
+    while (meta_ttl_idx_ < meta_ttl_num_ &&
+             (c = mk_from_meta.compare(mk_from_data)) < 0) {
+      m_reader >> mk_from_meta;
+      m_reader >> vt;
+      meta_ttl_idx_++;
+    }
+    if (0 != c) {
+      TRAC("TTL_StreamReader: cmp(%s, %s) = %d", mk_from_meta, mk_from_data, c);
+    }
+    return 0 == c;
+  }
+  void OpenFile(const CompactionParams& cp) {
+    // stick to dcompact_worker.cpp
+    static const string NFS_MOUNT_ROOT = GetDirFromEnv("NFS_MOUNT_ROOT", "/mnt/nfs");
+    const string& new_prefix = MakePath(NFS_MOUNT_ROOT, cp.instance_name);
+    const string& hoster_dir = cp.cf_paths[0].path;
+    const string& worker_dir = ReplacePrefix(cp.hoster_root, new_prefix, hoster_dir);
+    std::string fpath = worker_dir;
+    char buf[32];
+    fpath.append(buf, sprintf(buf, "/job-%08d/ttl", cp.job_id));
+    //m_file.open(fpath, O_RDONLY, 0777);
+    m_file.open("zstd -dcf " + fpath, "r");
+    m_reader.attach(&m_file);
+    m_reader.set_bufsize(32*1024);
+  }
+};
+
 class WorkerBaseDataFilter : public BaseDataFilter {
 public:
   WorkerBaseDataFilter() : BaseDataFilter(nullptr, nullptr) {}
@@ -191,11 +276,10 @@ public:
     Slice new_cur_key = parsed_base_data_key.key();
     if (new_cur_key != cur_key_) {
       cur_key_.assign(new_cur_key.data_, new_cur_key.size_);
-      size_t idx = ttlmap_->find_i(cur_key_);
-      if (ttlmap_->end_i() != idx) {
+      if (m_ttl.ReadUntil(cur_key_)) {
         meta_not_found_ = false;
-        cur_meta_version_ = ttlmap_->val(idx).version;
-        cur_meta_timestamp_ = ttlmap_->val(idx).timestamp;
+        cur_meta_version_ = m_ttl.vt.version;
+        cur_meta_timestamp_ = m_ttl.vt.timestamp;
       } else {
         meta_not_found_ = true;
       }
@@ -220,7 +304,7 @@ public:
       return false;
     }
   }
-  const terark::hash_strmap<VersionTimestamp>* ttlmap_;
+  mutable TTL_StreamReader m_ttl;
 };
 
 class WorkerListsDataFilter : public ListsDataFilter {
@@ -241,11 +325,10 @@ public:
     Slice new_cur_key = parsed_lists_data_key.key();
     if (new_cur_key != cur_key_) {
       cur_key_.assign(new_cur_key.data_, new_cur_key.size_);
-      size_t idx = ttlmap_->find_i(cur_key_);
-      if (ttlmap_->end_i() != idx) {
+      if (m_ttl.ReadUntil(cur_key_)) {
         meta_not_found_ = false;
-        cur_meta_version_ = ttlmap_->val(idx).version;
-        cur_meta_timestamp_ = ttlmap_->val(idx).timestamp;
+        cur_meta_version_ = m_ttl.vt.version;
+        cur_meta_timestamp_ = m_ttl.vt.timestamp;
       } else {
         meta_not_found_ = true;
       }
@@ -270,7 +353,7 @@ public:
       return false;
     }
   }
-  const terark::hash_strmap<VersionTimestamp>* ttlmap_;
+  mutable TTL_StreamReader m_ttl;
 };
 
 class WorkerZSetsScoreFilter : public ZSetsScoreFilter {
@@ -291,11 +374,10 @@ public:
     Slice new_cur_key = parsed_zsets_score_key.key();
     if (new_cur_key != cur_key_) {
       cur_key_.assign(new_cur_key.data_, new_cur_key.size_);
-      size_t idx = ttlmap_->find_i(cur_key_);
-      if (ttlmap_->end_i() != idx) {
+      if (m_ttl.ReadUntil(cur_key_)) {
         meta_not_found_ = false;
-        cur_meta_version_ = ttlmap_->val(idx).version;
-        cur_meta_timestamp_ = ttlmap_->val(idx).timestamp;
+        cur_meta_version_ = m_ttl.vt.version;
+        cur_meta_timestamp_ = m_ttl.vt.timestamp;
       } else {
         meta_not_found_ = true;
       }
@@ -319,37 +401,48 @@ public:
       return false;
     }
   }
-  const terark::hash_strmap<VersionTimestamp>* ttlmap_;
+  mutable TTL_StreamReader m_ttl;
 };
 
-template<class WorkerFilter, class HosterFilter, class Factory>
-static std::unique_ptr<CompactionFilter> Tpl_ttlmapNewFilter(const Factory* fac) {
-  if (IsCompactionWorker()) {
-    auto filter = new WorkerFilter();
-    filter->unix_time = fac->unix_time_;
-    filter->ttlmap_ = &fac->ttlmap_;
-    return std::unique_ptr<CompactionFilter>(filter);
-  } else {
+template<class HosterFilter, class Factory>
+static std::unique_ptr<CompactionFilter>
+HosterSideNewFilter(Factory* fac, const CompactionFilterContext& ctx) {
     DB** dbp = fac->db_ptr_;
     auto filter = new HosterFilter(dbp ? *dbp : NULL, fac->cf_handles_ptr_);
+    filter->smallest_seqno_ = ctx.smallest_seqno;
     rocksdb::Env::Default()->GetCurrentTime(&filter->unix_time);
     return std::unique_ptr<CompactionFilter>(filter);
-  }
-}
-std::unique_ptr<CompactionFilter>
-BaseDataFilterFactory::CreateCompactionFilter(const CompactionFilterContext&) {
-  return Tpl_ttlmapNewFilter<WorkerBaseDataFilter, BaseDataFilter>(this);
-}
-std::unique_ptr<CompactionFilter>
-ListsDataFilterFactory::CreateCompactionFilter(const CompactionFilterContext&) {
-  return Tpl_ttlmapNewFilter<WorkerListsDataFilter, ListsDataFilter>(this);
-}
-std::unique_ptr<CompactionFilter>
-ZSetsScoreFilterFactory::CreateCompactionFilter(const CompactionFilterContext&) {
-  return Tpl_ttlmapNewFilter<WorkerZSetsScoreFilter, ZSetsScoreFilter>(this);
 }
 
-DATA_IO_DUMP_RAW_MEM_E(VersionTimestamp);
+template<class WorkerFilter, class HosterFilter, class Factory>
+static std::unique_ptr<CompactionFilter>
+SideNewFilter(Factory* fac, const CompactionFilterContext& ctx) {
+ if (IsCompactionWorker()) {
+    auto filter = new WorkerFilter();
+    filter->unix_time = fac->unix_time_;
+    filter->m_ttl.OpenFile(*fac->m_cp);
+    filter->m_ttl.meta_ttl_num_ = fac->meta_ttl_num_;
+    return std::unique_ptr<CompactionFilter>(filter);
+  } else {
+    fac->TrySetDBptr();
+    return HosterSideNewFilter<HosterFilter>(fac, ctx);
+  }
+}
+
+#define BW_SideNewFilter(Filter) \
+std::unique_ptr<CompactionFilter> \
+Filter##Factory::CreateCompactionFilter(const CompactionFilterContext& ctx) { \
+  return HosterSideNewFilter<Filter>(this, ctx); \
+} \
+template<> \
+std::unique_ptr<CompactionFilter> \
+FilterFac<Filter##Factory>::CreateCompactionFilter(const CompactionFilterContext& ctx) { \
+  return SideNewFilter<Worker##Filter, Filter>(this, ctx); \
+}
+
+BW_SideNewFilter(BaseDataFilter);
+BW_SideNewFilter(ListsDataFilter);
+BW_SideNewFilter(ZSetsScoreFilter);
 
 std::string decode_00_0n(Slice src) {
   if (src.empty()) {
@@ -374,20 +467,49 @@ static VersionTimestamp DecodeVT(std::string* meta_value) {
   return vt;
 }
 
+inline static const char* pathbasename(Slice p) {
+  auto sep = (const char*)memrchr(p.data_, '/', p.size_);
+  if (sep)
+    return sep + 1;
+  else
+    return p.data_;
+}
+
+Iterator* NewMetaIter(DB* db, ColumnFamilyHandle* cfh,
+                      uint64_t smallest_seqno) {
+// DEBG("NewMetaIter:%s.%s: smallest_seqno = %zd",
+//       pathbasename(db->GetName()), cfh->GetName(), size_t(smallest_seqno));
+  ReadOptions rdo;
+  if (smallest_seqno > 0) {
+    rdo.table_filter = [smallest_seqno]
+    (const TableProperties&, const FileMetaData& fmd) {
+      // do not retrieve too old data
+      return fmd.fd.smallest_seqno >= smallest_seqno;
+    };
+  }
+  return db->NewIterator(rdo, cfh);
+}
+
 static
-void load_ttlmap(hash_strmap<VersionTimestamp>& ttlmap,
-                 int job_id,
+size_t write_ttl_file(const CompactionParams& cp,
                  const std::string& type,
                  const CompactionFilterFactory& fac,
                  DB** dbpp, std::vector<ColumnFamilyHandle*>* cfh_vec,
-                 Slice smallest_user_key, Slice largest_user_key,
                  VersionTimestamp (*decode)(std::string*))
 {
+  std::string fpath = cp.cf_paths[0].path;
+  char buf[32];
+  fpath.append(buf, sprintf(buf, "/job-%08d/ttl", cp.job_id));
+  //OsFileStream fp(fpath, O_WRONLY|O_CREAT, 0777);
+  ProcPipeStream fp("zstd -f - -o " + fpath, "w");
+  LittleEndianDataOutput<OutputBuffer> dio(&fp);
+  dio.set_bufsize(32*1024);
+
   DB* db = *dbpp;
   ColumnFamilyHandle* cfh = (*cfh_vec)[0];
-  std::unique_ptr<Iterator> iter(db->NewIterator(ReadOptions(), cfh));
-  const std::string start = decode_00_0n(smallest_user_key);
-  const std::string bound = decode_00_0n(largest_user_key);
+  std::unique_ptr<Iterator> iter(NewMetaIter(db, cfh, cp.smallest_seqno));
+  const std::string start = decode_00_0n(cp.smallest_user_key);
+  const std::string bound = decode_00_0n(cp.largest_user_key);
   using namespace std::chrono;
   auto t0 = steady_clock::now();
   if (start.empty()) {
@@ -396,32 +518,50 @@ void load_ttlmap(hash_strmap<VersionTimestamp>& ttlmap,
     iter->Seek(start);
   }
   std::string meta_value;
-  size_t bytes = 0;
+  size_t bytes = 0, num = 0;
   while (iter->Valid()) {
     Slice k = iter->key(); if (!bound.empty() && bound < k) break;
     Slice v = iter->value();
     meta_value.assign(v.data_, v.size_);
-    ttlmap[k] = decode(&meta_value);
+    dio.write_var_uint64(k.size_);
+    dio.ensureWrite(k.data_, k.size_);
+    dio << decode(&meta_value);
     bytes += k.size_ + 1; // 1 for key len byte, for simple, ignore len > 255
+    num++;
     iter->Next();
   }
-  bytes += sizeof(VersionTimestamp) * ttlmap.size();
+  bytes += sizeof(VersionTimestamp) * num;
   auto t1 = steady_clock::now();
   double d = duration_cast<microseconds>(t1-t0).count()/1e6;
-  INFO("job_id: %d: %s.%s.Serialize: %8.4f sec %8.6f Mkv %9.6f MB, start = %s, bound = %s",
-        job_id, type, fac.Name(), d, ttlmap.size()/1e6, bytes/1e6, start, bound);
+  struct stat st = {};
+  if (lstat(fpath.c_str(), &st) < 0) {
+    WARN("job_id: %d: %s.%s.Serialize: lstat(%s) = %m", cp.job_id, type, fac.Name(), fpath);
+  }
+  INFO("job_id: %d: %s.%s.Serialize: tim %8.4f sec, %8.6f Mkv, %9.6f MB, zip %9.6f MB, start = %s, bound = %s",
+        cp.job_id, type, fac.Name(), d, num/1e6, bytes/1e6, st.st_size/1e6, start, bound);
+  return num;
 }
 
 template<class Factory, class ParsedMetaValue>
 struct DataFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
   using ConcreteFactory = FilterFac<Factory>;
-  std::string smallest_user_key, largest_user_key;
+  const CompactionParams* m_cp;
   int job_id;
   size_t rawzip[2];
   DataFilterFactorySerDe(const json& js, const SidePluginRepo& repo) {
     auto cp = JS_CompactionParamsDecodePtr(js);
-    smallest_user_key = cp->smallest_user_key;
-    largest_user_key = cp->largest_user_key;
+    m_cp = cp;
+
+    // pika requires 1==max_subcompactions, this makes all things simpler
+    //
+    // 1==max_subcompactions is not required for Dcompact, but it is too
+    // complicated to gracefully support multi sub compact in Dcompact,
+    // such as this use case, it requires DB side and Worker side has same
+    // sub compact boundary to reading keys by streaming.
+    TERARK_VERIFY_EQ(cp->max_subcompactions, 1);
+
+    const auto& smallest_user_key = cp->smallest_user_key;
+    const auto& largest_user_key = cp->largest_user_key;
     job_id = cp->job_id;
     cp->InputBytes(rawzip);
     TRAC("%s: job_id = %d, smallest_user_key = %s, largest_user_key = %s, job raw = %.3f GB, zip = %.3f GB",
@@ -436,12 +576,13 @@ struct DataFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
       // do nothing
     }
     else {
-      hash_strmap<VersionTimestamp> ttlmap;
+      size_t kvs; // meta_ttl_num_
       if (const_cast<ConcreteFactory&>(fac).TrySetDBptr()) {
-        load_ttlmap(ttlmap, job_id, fac.m_type, fac, fac.db_ptr_, fac.cf_handles_ptr_,
-            smallest_user_key, largest_user_key, &DecodeVT<ParsedMetaValue>);
+        kvs = write_ttl_file(*m_cp, fac.m_type, fac,
+          fac.db_ptr_, fac.cf_handles_ptr_, &DecodeVT<ParsedMetaValue>);
       }
       else {
+        kvs = 0;
         // now it is in DB Open, do not load ttlmap
         DEBG("job_id: %d: %s.%s.Serialize: db is in opening",
               job_id, fac.m_type.c_str(), fac.Name());
@@ -450,23 +591,23 @@ struct DataFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
       rocksdb::Env::Default()->GetCurrentTime(&unix_time);
       auto pos0 = dio.tell();
       dio << unix_time;
-      dio << ttlmap;
-      auto kvs = ttlmap.size();
+      dio << kvs;
       auto pos1 = dio.tell();
       auto bytes = size_t(pos1-pos0);
-      DEBG("job_id: %d: %s.%s.Serialize: kvs = %zd, bytes = %zd, job raw = %.3f GB, zip = %.3f GB",
-            job_id, fac.m_type.c_str(), fac.Name(), kvs, bytes, rawzip[0]/1e9, rawzip[1]/1e9);
+      DEBG("job_id: %d: %s.%s.Serialize: kvs = %zd, bytes = %zd, job raw = %.3f GB, zip = %.3f GB, smallest_seqno = %lld",
+            job_id, fac.m_type.c_str(), fac.Name(), kvs, bytes, rawzip[0]/1e9, rawzip[1]/1e9, (llong)m_cp->smallest_seqno);
     }
   }
   void DeSerialize(FILE* reader, CompactionFilterFactory* base)
   const override {
     auto fac = dynamic_cast<ConcreteFactory*>(base);
     if (IsCompactionWorker()) {
+      fac->m_cp = this->m_cp;
       LittleEndianDataInput<NonOwnerFileStream> dio(reader);
       auto pos0 = dio.tell();
       dio >> fac->unix_time_;
-      dio >> fac->ttlmap_;
-      auto kvs = fac->ttlmap_.size();
+      dio >> fac->meta_ttl_num_;
+      auto kvs = fac->meta_ttl_num_;
       auto pos1 = dio.tell();
       auto bytes = size_t(pos1-pos0);
       DEBG("job_id: %d: %s.%s.DeSerialize: kvs = %zd, bytes = %zd",

@@ -52,7 +52,7 @@ class StringsFilterFactory : public rocksdb::CompactionFilterFactory {
   const char* Name() const override {
     return "StringsFilterFactory";
   }
-  mutable uint64_t unix_time_ = 0; // only used by compact worker
+  uint64_t unix_time_ = 0; // only used by compact worker
 };
 
 }  //  namespace blackwidow

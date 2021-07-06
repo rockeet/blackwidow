@@ -9,14 +9,20 @@
 #include <string>
 #include <memory>
 #include <vector>
-#include <terark/hash_strmap.hpp>
 
 #include "src/debug.h"
 #include "src/base_meta_value_format.h"
 #include "src/base_data_key_format.h"
 #include "rocksdb/compaction_filter.h"
 
+namespace rocksdb {
+  class ColumnFamilyHandle;
+}
+using rocksdb::ColumnFamilyHandle;
+
 namespace blackwidow {
+
+rocksdb::Iterator* NewMetaIter(rocksdb::DB*, ColumnFamilyHandle*, uint64_t);
 
 class BaseMetaFilter : public rocksdb::CompactionFilter {
  public:
@@ -61,7 +67,7 @@ class BaseMetaFilterFactory : public rocksdb::CompactionFilterFactory {
   const char* Name() const override {
     return "BaseMetaFilterFactory";
   }
-  mutable uint64_t unix_time_ = 0; // only used by compact worker
+  uint64_t unix_time_ = 0; // only used by compact worker
 };
 
 class BaseDataFilter : public rocksdb::CompactionFilter {
@@ -96,25 +102,26 @@ class BaseDataFilter : public rocksdb::CompactionFilter {
       if (cf_handles_ptr_->size() == 0) {
         return false;
       }
-    #if 1
+    #if 0
       std::string meta_key = decode_00_0n(key);
       if (!iter_) {
-        iter_ = db_->NewIterator(default_read_options_, (*cf_handles_ptr_)[0]);
-        ROCKSDB_VERIFY(nullptr != iter);
+        iter_ = NewMetaIter(db_, (*cf_handles_ptr_)[0], smallest_seqno_);
+        ROCKSDB_VERIFY(nullptr != iter_);
         iter_->Seek(meta_key);
       }
-      else if (!meta_not_found_) { // prev is found, needs move forward
-        iter_->Next();
+      auto iter = iter_;
+      while (iter->Valid() && iter->key() < meta_key) {
+        iter->Next();
       }
       Status s;
-      if (!iter_->Valid()) {
+      if (!iter->Valid()) {
         s = Status::NotFound("iter_->Valid() is false");
       }
-      else if (iter_->key() != meta_key) {
+      else if (iter->key() != meta_key) {
         s = Status::NotFound("iter_->key() != meta_key");
       }
       else {
-        meta_value = iter_->value().ToString();
+        meta_value = iter->value().ToString();
       }
     #else
       Status s = db_->Get(default_read_options_,
@@ -159,6 +166,7 @@ class BaseDataFilter : public rocksdb::CompactionFilter {
 
   rocksdb::DB* db_;
   mutable rocksdb::Iterator* iter_;
+  mutable uint64_t smallest_seqno_;
   std::vector<rocksdb::ColumnFamilyHandle*>* cf_handles_ptr_;
   rocksdb::ReadOptions default_read_options_;
   mutable std::string parse_key_buf_;
@@ -183,8 +191,8 @@ class BaseDataFilterFactory : public rocksdb::CompactionFilterFactory {
 
   rocksdb::DB** db_ptr_;
   std::vector<rocksdb::ColumnFamilyHandle*>* cf_handles_ptr_;
-  mutable uint64_t unix_time_;
-  terark::hash_strmap<VersionTimestamp> ttlmap_; // only used by compact worker
+  uint64_t unix_time_;
+  size_t meta_ttl_num_;
 };
 
 typedef BaseMetaFilter HashesMetaFilter;

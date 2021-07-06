@@ -9,7 +9,6 @@
 #include <string>
 #include <vector>
 #include <memory>
-#include <terark/hash_strmap.hpp>
 
 #include "rocksdb/compaction_filter.h"
 
@@ -91,6 +90,8 @@ class ZSetsScoreFilter : public rocksdb::CompactionFilter {
   const char* Name() const override { return "ZSetsScoreFilter";}
 
   rocksdb::DB* db_;
+  mutable rocksdb::Iterator* iter_ = nullptr;
+  mutable uint64_t smallest_seqno_;
   std::vector<rocksdb::ColumnFamilyHandle*>* cf_handles_ptr_;
   rocksdb::ReadOptions default_read_options_;
   mutable std::string parse_key_buf_;
@@ -116,8 +117,8 @@ class ZSetsScoreFilterFactory : public rocksdb::CompactionFilterFactory {
 
   rocksdb::DB** db_ptr_;
   std::vector<rocksdb::ColumnFamilyHandle*>* cf_handles_ptr_;
-  mutable uint64_t unix_time_;
-  terark::hash_strmap<VersionTimestamp> ttlmap_; // only used by compact worker
+  uint64_t unix_time_;
+  size_t meta_ttl_num_;
 };
 
 }  //  namespace blackwidow
