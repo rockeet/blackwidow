@@ -484,11 +484,11 @@ RegDataFilterFactorySerDe(ListsDataFilterFactory, ParsedListsMetaValue);
 RegDataFilterFactorySerDe(ZSetsScoreFilterFactory, ParsedZSetsMetaValue);
 
 
-struct HashesDataKeyDecoder : public UserKeyCoder {
+struct BaseDataKeyDecoder : public UserKeyCoder {
   void Update(const json&, const SidePluginRepo&) override {
   }
   std::string ToString(const json&, const SidePluginRepo&) const override {
-    return "This is the HashesDataKeyDecoder.<br/>"
+    return "This is the BaseDataKeyDecoder for hashes, sets and zsets.<br/>"
            "The format is key:version:data.";
   }
   void Encode(Slice, std::string*) const override {
@@ -497,7 +497,7 @@ struct HashesDataKeyDecoder : public UserKeyCoder {
   }
   void Decode(Slice coded, std::string* de) const override {
     std::string tmp_s;
-    blackwidow::ParsedHashesDataKey tmp_p(coded, &tmp_s);
+    blackwidow::ParsedBaseDataKey tmp_p(coded, &tmp_s);
     auto k = tmp_p.key();
     auto v = std::to_string(tmp_p.version());
     auto d = tmp_p.data();
@@ -512,75 +512,8 @@ struct HashesDataKeyDecoder : public UserKeyCoder {
     HtmlAppendEscape(de, d.data(), d.size());
   }
 };
-ROCKSDB_REG_DEFAULT_CONS(HashesDataKeyDecoder, AnyPlugin);
-ROCKSDB_REG_AnyPluginManip("HashesDataKeyDecoder");
-
-
-
-
-struct SetsDataKeyDecoder : public UserKeyCoder {
-  void Update(const json&, const SidePluginRepo&) override {
-  }
-  std::string ToString(const json&, const SidePluginRepo&) const override {
-    return "This is the SetsDataKeyDecoder.<br/>"
-           "The format is key:version:data.";
-  }
-  void Encode(Slice, std::string*) const override {
-    assert(!"Unexpected call");
-    THROW_InvalidArgument("Unexpected call");
-  }
-  void Decode(Slice coded, std::string* de) const override {
-    std::string tmp_s;
-    blackwidow::ParsedSetsMemberKey tmp_p(coded, &tmp_s);
-    auto k = tmp_p.key();
-    auto v = std::to_string(tmp_p.version());
-    auto d = tmp_p.data();
-
-    de->clear();
-    de->reserve(k.size() + 1 + v.size() + 1 + d.size());
-
-    HtmlAppendEscape(de, k.data(), k.size());
-    de->append("<font color=red>:</font>");
-    de->append(v);
-    de->append("<font color=red>:</font>");
-    HtmlAppendEscape(de, d.data(), d.size());
-  }
-};
-ROCKSDB_REG_DEFAULT_CONS(SetsDataKeyDecoder, AnyPlugin);
-ROCKSDB_REG_AnyPluginManip("SetsDataKeyDecoder");
-
-
-
-struct ZSetsDataKeyDecoder : public UserKeyCoder {
-  void Update(const json&, const SidePluginRepo&) override {
-  }
-  std::string ToString(const json&, const SidePluginRepo&) const override {
-    return "This is the ZSetsDataKeyDecoder.<br/>"
-           "The format is key:version:data.";
-  }
-  void Encode(Slice, std::string*) const override {
-    assert(!"Unexpected call");
-    THROW_InvalidArgument("Unexpected call");
-  }
-  void Decode(Slice coded, std::string* de) const override {
-    std::string tmp_s;
-    blackwidow::ParsedZSetsMemberKey tmp_p(coded, &tmp_s);
-    auto k = tmp_p.key();
-    auto v = std::to_string(tmp_p.version());
-    auto d = tmp_p.data();
-
-    de->clear();
-    de->reserve(k.size() + 1 + v.size() + 1 + d.size());
-
-    HtmlAppendEscape(de, k.data(), k.size());
-    de->append("<font color=red>:</font>");
-    de->append(v);
-    de->append("<font color=red>:</font>");
-    HtmlAppendEscape(de, d.data(), d.size());
-  }
-};
-ROCKSDB_REG_DEFAULT_CONS(ZSetsDataKeyDecoder, AnyPlugin);
-ROCKSDB_REG_AnyPluginManip("ZSetsDataKeyDecoder");
+ROCKSDB_REG_DEFAULT_CONS(BaseDataKeyDecoder, AnyPlugin);
+ROCKSDB_REG_AnyPluginManip("BaseDataKeyDecoder");
 
 
 
