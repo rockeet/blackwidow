@@ -651,16 +651,14 @@ struct BaseDataKeyDecoder : public UserKeyCoder {
     de->reserve(k.size() + 1 + v.size() + 1 + d.size());
 
     HtmlAppendEscape(de, k.data(), k.size());
-    de->append("<font color=red>:</font>");
+    de->append("<em>:");
     de->append(v);
-    de->append("<font color=red>:</font>");
+    de->append(":</em>");
     HtmlAppendEscape(de, d.data(), d.size());
   }
 };
 ROCKSDB_REG_DEFAULT_CONS(BaseDataKeyDecoder, AnyPlugin);
 ROCKSDB_REG_AnyPluginManip("BaseDataKeyDecoder");
-
-
 
 struct ZSetsScoreKeyDecoder : public UserKeyCoder {
   void Update(const json&, const SidePluginRepo&) override {
@@ -685,18 +683,16 @@ struct ZSetsScoreKeyDecoder : public UserKeyCoder {
     de->reserve(k.size() + 1 + v.size() + 1 + s.size() + 1 + m.size());
 
     HtmlAppendEscape(de, k.data(), k.size());
-    de->append("<font color=red>:</font>");
+    de->append("<em>:");
     de->append(v);
-    de->append("<font color=red>:</font>");
+    de->append(":");
     de->append(s);
-    de->append("<font color=red>:</font>");
+    de->append(":</em>");
     HtmlAppendEscape(de, m.data(), m.size());
   }
 };
 ROCKSDB_REG_DEFAULT_CONS(ZSetsScoreKeyDecoder, AnyPlugin);
 ROCKSDB_REG_AnyPluginManip("ZSetsScoreKeyDecoder");
-
-
 
 struct ListsDataKeyDecoder : public UserKeyCoder {
   void Update(const json&, const SidePluginRepo&) override {
@@ -720,17 +716,14 @@ struct ListsDataKeyDecoder : public UserKeyCoder {
     de->reserve(coded.size_);
 
     HtmlAppendEscape(de, k.data(), k.size());
-    de->append("<font color=red>:</font>");
+    de->append("<em>:");
     de->append(v);
-    de->append("<font color=red>:</font>");
+    de->append(":</em>");
     de->append(i);
   }
 };
 ROCKSDB_REG_DEFAULT_CONS(ListsDataKeyDecoder, AnyPlugin);
 ROCKSDB_REG_AnyPluginManip("ListsDataKeyDecoder");
-
-
-
 
 struct  StringsDataKeyDecoder : public UserKeyCoder {
   void Update(const json&, const SidePluginRepo&) override {
