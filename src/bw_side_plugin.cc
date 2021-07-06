@@ -629,4 +629,126 @@ RegDataFilterFactorySerDe(ListsDataFilterFactory, ParsedListsMetaValue);
 RegDataFilterFactorySerDe(ZSetsScoreFilterFactory, ParsedZSetsMetaValue);
 
 
+struct BaseDataKeyDecoder : public UserKeyCoder {
+  void Update(const json&, const SidePluginRepo&) override {
+  }
+  std::string ToString(const json&, const SidePluginRepo&) const override {
+    return "This is the BaseDataKeyDecoder for hashes, sets and zsets.<br/>"
+           "The format is key:version:data.";
+  }
+  void Encode(Slice, std::string*) const override {
+    assert(!"Unexpected call");
+    THROW_InvalidArgument("Unexpected call");
+  }
+  void Decode(Slice coded, std::string* de) const override {
+    std::string tmp_s;
+    blackwidow::ParsedBaseDataKey tmp_p(coded, &tmp_s);
+    auto k = tmp_p.key();
+    auto v = std::to_string(tmp_p.version());
+    auto d = tmp_p.data();
+
+    de->clear();
+    de->reserve(k.size() + 1 + v.size() + 1 + d.size());
+
+    HtmlAppendEscape(de, k.data(), k.size());
+    de->append("<font color=red>:</font>");
+    de->append(v);
+    de->append("<font color=red>:</font>");
+    HtmlAppendEscape(de, d.data(), d.size());
+  }
+};
+ROCKSDB_REG_DEFAULT_CONS(BaseDataKeyDecoder, AnyPlugin);
+ROCKSDB_REG_AnyPluginManip("BaseDataKeyDecoder");
+
+
+
+struct ZSetsScoreKeyDecoder : public UserKeyCoder {
+  void Update(const json&, const SidePluginRepo&) override {
+  }
+  std::string ToString(const json&, const SidePluginRepo&) const override {
+    return "This is the ZSetsScoreKeyDecoder.<br/>"
+           "The format is key:version:score:member.";
+  }
+  void Encode(Slice, std::string*) const override {
+    assert(!"Unexpected call");
+    THROW_InvalidArgument("Unexpected call");
+  }
+  void Decode(Slice coded, std::string* de) const override {
+    std::string tmp_s;
+    blackwidow::ParsedZSetsScoreKey tmp_p(coded, &tmp_s);
+    auto k = tmp_p.key();
+    auto v = std::to_string(tmp_p.version());
+    auto s = std::to_string(tmp_p.score());
+    auto m = tmp_p.member();
+
+    de->clear();
+    de->reserve(k.size() + 1 + v.size() + 1 + s.size() + 1 + m.size());
+
+    HtmlAppendEscape(de, k.data(), k.size());
+    de->append("<font color=red>:</font>");
+    de->append(v);
+    de->append("<font color=red>:</font>");
+    de->append(s);
+    de->append("<font color=red>:</font>");
+    HtmlAppendEscape(de, m.data(), m.size());
+  }
+};
+ROCKSDB_REG_DEFAULT_CONS(ZSetsScoreKeyDecoder, AnyPlugin);
+ROCKSDB_REG_AnyPluginManip("ZSetsScoreKeyDecoder");
+
+
+
+struct ListsDataKeyDecoder : public UserKeyCoder {
+  void Update(const json&, const SidePluginRepo&) override {
+  }
+  std::string ToString(const json&, const SidePluginRepo&) const override {
+    return "This is the ListsDataKeyDecoder.<br/>"
+           "The format is key:version:index.";
+  }
+  void Encode(Slice, std::string*) const override {
+    assert(!"Unexpected call");
+    THROW_InvalidArgument("Unexpected call");
+  }
+  void Decode(Slice coded, std::string* de) const override {
+    std::string tmp_s;
+    blackwidow::ParsedListsDataKey tmp_p(coded, &tmp_s);
+    auto k = tmp_p.key();
+    auto v = std::to_string(tmp_p.version());
+    auto i = std::to_string(tmp_p.index());
+
+    de->clear();
+    de->reserve(coded.size_);
+
+    HtmlAppendEscape(de, k.data(), k.size());
+    de->append("<font color=red>:</font>");
+    de->append(v);
+    de->append("<font color=red>:</font>");
+    de->append(i);
+  }
+};
+ROCKSDB_REG_DEFAULT_CONS(ListsDataKeyDecoder, AnyPlugin);
+ROCKSDB_REG_AnyPluginManip("ListsDataKeyDecoder");
+
+
+
+
+struct  StringsDataKeyDecoder : public UserKeyCoder {
+  void Update(const json&, const SidePluginRepo&) override {
+  }
+  std::string ToString(const json&, const SidePluginRepo&) const override {
+    return "This is the StringsDataKeyDecoder.";
+  }
+  void Encode(Slice, std::string*) const override {
+    assert(!"Unexpected call");
+    THROW_InvalidArgument("Unexpected call");
+  }
+  void Decode(Slice coded, std::string* de) const override {
+    de->clear();
+    de->reserve(coded.size_);
+    HtmlAppendEscape(de, coded.data(), coded.size());
+  }
+};
+ROCKSDB_REG_DEFAULT_CONS(StringsDataKeyDecoder, AnyPlugin);
+ROCKSDB_REG_AnyPluginManip("StringsDataKeyDecoder");
+
 } // namespace blackwidow
