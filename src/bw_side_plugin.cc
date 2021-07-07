@@ -188,11 +188,11 @@ struct TTL_StreamReader {
   VersionTimestamp vt;
   bool ReadUntil(const std::string& mk_from_data) {
     int c = INT_MIN;
-    while (meta_ttl_idx_ < meta_ttl_num_ &&
-             (c = mk_from_meta.compare(mk_from_data)) < 0) {
+    while (meta_ttl_idx_ < meta_ttl_num_ && c < 0) {
       m_reader >> mk_from_meta;
       m_reader >> vt;
       meta_ttl_idx_++;
+      c = mk_from_meta.compare(mk_from_data);
     }
     if (0 != c) {
       TRAC("TTL_StreamReader: num = %zd, idx = %zd, cmp(%s, %s) = %d",
