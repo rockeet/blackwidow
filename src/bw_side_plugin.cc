@@ -178,50 +178,6 @@ RegSimpleFilterFactorySerDe(StringsFilterFactory);
 
 DATA_IO_DUMP_RAW_MEM_E(VersionTimestamp);
 
-using std::string;
-string GetDirFromEnv(const char* name, const char* Default) {
-  string dir = getEnvStr(name, Default);
-  if (!dir.empty() && '/' != dir.back()) {
-    dir.push_back('/');
-  }
-  return dir;
-}
-
-bool ReplacePrefix(Slice Old, Slice New, Slice str, string* res) {
-  if (Old.size_ && Old.data_[Old.size_-1] == '/') {
-    if (terark::fstring(Old).notail(1) == str) {
-      res->assign(New.data_, New.size_);
-      return true;
-    }
-  }
-  if (str.starts_with(Old)) {
-    size_t suffixLen = str.size_ - Old.size_;
-    res->reserve(New.size_ + suffixLen);
-    res->assign(New.data_, New.size_);
-    res->append(str.data_ + Old.size_, suffixLen);
-    return true;
-  }
-  return false;
-}
-
-string ReplacePrefix(Slice Old, Slice New, Slice str) {
-  string res;
-  if (ReplacePrefix(Old, New, str, &res)) {
-    return res;
-  }
-  THROW_STD(invalid_argument,
-            "str = '%s' does not start with Old='%s'",
-            str.data(), Old.data());
-}
-
-string MakePath(string dir, Slice sub) {
-  if ('/' != dir.back()) {
-    dir.push_back('/');
-  }
-  dir.append(sub.data(), sub.size());
-  return dir;
-}
-
 struct TTL_StreamReader {
   //OsFileStream m_file;
   ProcPipeStream m_file;
@@ -245,6 +201,7 @@ struct TTL_StreamReader {
   }
   void OpenFile(const CompactionParams& cp) {
     // stick to dcompact_worker.cpp
+    using std::string;
     static const string NFS_MOUNT_ROOT = GetDirFromEnv("NFS_MOUNT_ROOT", "/mnt/nfs");
     const string& new_prefix = MakePath(NFS_MOUNT_ROOT, cp.instance_name);
     const string& hoster_dir = cp.cf_paths[0].path;
