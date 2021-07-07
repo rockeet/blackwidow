@@ -640,7 +640,7 @@ struct BaseDataKeyDecoder : public UserKeyCoder {
   }
   std::string ToString(const json&, const SidePluginRepo&) const override {
     return "This is the BaseDataKeyDecoder for hashes, sets and zsets.<br/>"
-           "The format is key:version:data.";
+           "The format is <strong>key:<em>version(datetime)</em>:field</strong>";
   }
   void Encode(Slice, std::string*) const override {
     assert(!"Unexpected call");
@@ -668,11 +668,10 @@ struct ZSetsScoreKeyDecoder : public UserKeyCoder {
   }
   std::string ToString(const json&, const SidePluginRepo&) const override {
     return "This is the ZSetsScoreKeyDecoder.<br/>"
-           "The format is key:version:score:member.";
+           "The format is <strong>key:<em>version(datetime)</em>:score:member</strong>";
   }
   void Encode(Slice, std::string*) const override {
-    assert(!"Unexpected call");
-    THROW_InvalidArgument("Unexpected call");
+    TERARK_DIE("This function should not be called");
   }
   void Decode(Slice coded, std::string* de) const override {
     std::string tmp_s;
@@ -699,11 +698,10 @@ struct ListsDataKeyDecoder : public UserKeyCoder {
   }
   std::string ToString(const json&, const SidePluginRepo&) const override {
     return "This is the ListsDataKeyDecoder.<br/>"
-           "The format is key:version:index.";
+           "The format is <strong>key:<em>version(datetime)</em>:index</strong>";
   }
   void Encode(Slice, std::string*) const override {
-    assert(!"Unexpected call");
-    THROW_InvalidArgument("Unexpected call");
+    TERARK_DIE("This function should not be called");
   }
   void Decode(Slice coded, std::string* de) const override {
     std::string tmp_s;
@@ -729,8 +727,7 @@ struct  StringsDataKeyDecoder : public UserKeyCoder {
     return "This is the StringsDataKeyDecoder.";
   }
   void Encode(Slice, std::string*) const override {
-    assert(!"Unexpected call");
-    THROW_InvalidArgument("Unexpected call");
+    TERARK_DIE("This function should not be called");
   }
   void Decode(Slice coded, std::string* de) const override {
     de->clear();
