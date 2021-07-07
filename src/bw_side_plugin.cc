@@ -628,7 +628,13 @@ RegDataFilterFactorySerDe(BaseDataFilterFactory, ParsedBaseMetaValue);
 RegDataFilterFactorySerDe(ListsDataFilterFactory, ParsedListsMetaValue);
 RegDataFilterFactorySerDe(ZSetsScoreFilterFactory, ParsedZSetsMetaValue);
 
-
+void AppendIsoDateTime(std::string* str, time_t t) {
+  struct tm   ti;
+  struct tm* pti = localtime_r(&t, &ti);
+  size_t oldsize = str->size();
+  str->resize(oldsize + 64);
+  str->resize(oldsize + strftime(&(*str)[oldsize], 64, "%F %T", pti));
+}
 struct BaseDataKeyDecoder : public UserKeyCoder {
   void Update(const json&, const SidePluginRepo&) override {
   }
@@ -644,15 +650,12 @@ struct BaseDataKeyDecoder : public UserKeyCoder {
     std::string tmp_s;
     blackwidow::ParsedBaseDataKey tmp_p(coded, &tmp_s);
     auto k = tmp_p.key();
-    auto v = std::to_string(tmp_p.version());
     auto d = tmp_p.data();
-
     de->clear();
-    de->reserve(k.size() + 1 + v.size() + 1 + d.size());
-
+    de->reserve(k.size() + 1 + 32 + 1 + d.size());
     HtmlAppendEscape(de, k.data(), k.size());
     de->append("<em>:");
-    de->append(v);
+    AppendIsoDateTime(de, tmp_p.version());
     de->append(":</em>");
     HtmlAppendEscape(de, d.data(), d.size());
   }
@@ -675,17 +678,14 @@ struct ZSetsScoreKeyDecoder : public UserKeyCoder {
     std::string tmp_s;
     blackwidow::ParsedZSetsScoreKey tmp_p(coded, &tmp_s);
     auto k = tmp_p.key();
-    auto v = std::to_string(tmp_p.version());
     auto s = std::to_string(tmp_p.score());
     auto m = tmp_p.member();
-
     de->clear();
-    de->reserve(k.size() + 1 + v.size() + 1 + s.size() + 1 + m.size());
-
+    de->reserve(k.size() + 1 + 32 + 1 + s.size() + 1 + m.size());
     HtmlAppendEscape(de, k.data(), k.size());
     de->append("<em>:");
-    de->append(v);
-    de->append(":");
+    AppendIsoDateTime(de, tmp_p.version());
+    de->append("</em>:<em>");
     de->append(s);
     de->append(":</em>");
     HtmlAppendEscape(de, m.data(), m.size());
@@ -709,15 +709,12 @@ struct ListsDataKeyDecoder : public UserKeyCoder {
     std::string tmp_s;
     blackwidow::ParsedListsDataKey tmp_p(coded, &tmp_s);
     auto k = tmp_p.key();
-    auto v = std::to_string(tmp_p.version());
     auto i = std::to_string(tmp_p.index());
-
     de->clear();
-    de->reserve(coded.size_);
-
+    de->reserve(coded.size_ + 32);
     HtmlAppendEscape(de, k.data(), k.size());
     de->append("<em>:");
-    de->append(v);
+    AppendIsoDateTime(de, tmp_p.version());
     de->append(":</em>");
     de->append(i);
   }
