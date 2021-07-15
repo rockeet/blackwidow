@@ -488,6 +488,7 @@ size_t write_ttl_file(const CompactionParams& cp,
     num++;
     iter->Next();
   }
+  dio.flush_buffer();
   bytes += sizeof(VersionTimestamp) * num;
   auto t1 = steady_clock::now();
   double d = duration_cast<microseconds>(t1-t0).count()/1e6;
