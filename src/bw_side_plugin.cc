@@ -497,6 +497,7 @@ size_t write_ttl_file(const CompactionParams& cp,
   }
   INFO("job_id: %d: %s.%s.Serialize: tim %8.4f sec, %8.6f Mkv, %9.6f MB, zip %9.6f MB, start = %s, bound = %s",
         cp.job_id, type, fac.Name(), d, num/1e6, bytes/1e6, st.st_size/1e6, start, bound);
+  cp.extra_serde_files.push_back("ttl");
   return num;
 }
 
