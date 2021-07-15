@@ -492,9 +492,8 @@ size_t write_ttl_file(const CompactionParams& cp,
   auto t1 = steady_clock::now();
   double d = duration_cast<microseconds>(t1-t0).count()/1e6;
   struct stat st = {};
-  if (lstat(fpath.c_str(), &st) < 0) {
-    WARN("job_id: %d: %s.%s.Serialize: lstat(%s) = %m", cp.job_id, type, fac.Name(), fpath);
-  }
+  TERARK_VERIFY_S(lstat(fpath.c_str(), &st) == 0, // lstat must success
+       "job_id: %d: %s.%s lstat(%s) = %m", cp.job_id, type, fac.Name(), fpath);
   INFO("job_id: %d: %s.%s.Serialize: tim %8.4f sec, %8.6f Mkv, %9.6f MB, zip %9.6f MB, start = %s, bound = %s",
         cp.job_id, type, fac.Name(), d, num/1e6, bytes/1e6, st.st_size/1e6, start, bound);
   cp.extra_serde_files.push_back("ttl");
