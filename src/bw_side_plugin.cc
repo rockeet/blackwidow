@@ -548,13 +548,10 @@ struct DataFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
       }
       int64_t unix_time;
       rocksdb::Env::Default()->GetCurrentTime(&unix_time);
-      auto pos0 = dio.tell();
       dio << unix_time;
       dio << kvs;
-      auto pos1 = dio.tell();
-      auto bytes = size_t(pos1-pos0);
-      DEBG("job_id: %d: %s.%s.Serialize: kvs = %zd, bytes = %zd, job raw = %.3f GB, zip = %.3f GB, smallest_seqno = %lld",
-            job_id, fac.m_type.c_str(), fac.Name(), kvs, bytes, rawzip[0]/1e9, rawzip[1]/1e9, (llong)m_cp->smallest_seqno);
+      DEBG("job_id: %d: %s.%s.Serialize: kvs = %zd, job raw = %.3f GB, zip = %.3f GB, smallest_seqno = %lld",
+            job_id, fac.m_type.c_str(), fac.Name(), kvs, rawzip[0]/1e9, rawzip[1]/1e9, (llong)m_cp->smallest_seqno);
     }
   }
   void DeSerialize(FILE* reader, CompactionFilterFactory* base)
@@ -563,14 +560,11 @@ struct DataFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
     if (IsCompactionWorker()) {
       fac->m_cp = this->m_cp;
       LittleEndianDataInput<NonOwnerFileStream> dio(reader);
-      auto pos0 = dio.tell();
       dio >> fac->unix_time_;
       dio >> fac->meta_ttl_num_;
       auto kvs = fac->meta_ttl_num_;
-      auto pos1 = dio.tell();
-      auto bytes = size_t(pos1-pos0);
-      DEBG("job_id: %d: %s.%s.DeSerialize: kvs = %zd, bytes = %zd",
-            job_id, fac->m_type.c_str(), fac->Name(), kvs, bytes);
+      DEBG("job_id: %d: %s.%s.DeSerialize: kvs = %zd, job raw = %.3f GB, zip = %.3f GB, smallest_seqno = %lld",
+            job_id, fac->m_type.c_str(), fac->Name(), kvs, rawzip[0]/1e9, rawzip[1]/1e9, (llong)m_cp->smallest_seqno);
     }
     else {
       // do nothing
