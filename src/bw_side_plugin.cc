@@ -211,7 +211,7 @@ struct TTL_StreamReader {
     char buf[32];
     fpath.append(buf, sprintf(buf, "/job-%08d/ttl", cp.job_id));
     //m_file.open(fpath, O_RDONLY, 0777);
-    m_file.open("zstd -dcf " + fpath, "r");
+    m_file.open("zstd -qdcf " + fpath, "r");
     m_reader.attach(&m_file);
     m_reader.set_bufsize(32*1024);
   }
@@ -459,7 +459,7 @@ size_t write_ttl_file(const CompactionParams& cp,
   char buf[32];
   fpath.append(buf, sprintf(buf, "/job-%08d/ttl", cp.job_id));
   //OsFileStream fp(fpath, O_WRONLY|O_CREAT, 0777);
-  ProcPipeStream fp("zstd -f - -o " + fpath, "w");
+  ProcPipeStream fp("zstd -qf - -o " + fpath, "w");
   LittleEndianDataOutput<OutputBuffer> dio(&fp);
   dio.set_bufsize(32*1024);
 
