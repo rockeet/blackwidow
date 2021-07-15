@@ -211,7 +211,7 @@ struct TTL_StreamReader {
     char buf[32];
     fpath.append(buf, sprintf(buf, "/job-%08d/ttl", cp.job_id));
     //m_file.open(fpath, O_RDONLY, 0777);
-    m_file.open("env -i zstd -dcf " + fpath, "r");
+    m_file.open("zstd -dcf " + fpath, "r");
     m_reader.attach(&m_file);
     m_reader.set_bufsize(32*1024);
   }
