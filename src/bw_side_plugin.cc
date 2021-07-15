@@ -187,7 +187,7 @@ struct TTL_StreamReader {
   std::string mk_from_meta; // mk_ means (meta key)
   VersionTimestamp vt;
   bool ReadUntil(const std::string& mk_from_data) {
-    int c = INT_MIN;
+    int c = mk_from_meta.compare(mk_from_data);
     while (meta_ttl_idx_ < meta_ttl_num_ && c < 0) {
       m_reader >> mk_from_meta;
       m_reader >> vt;
