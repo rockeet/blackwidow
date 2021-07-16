@@ -455,7 +455,13 @@ size_t write_ttl_file(const CompactionParams& cp,
                  DB** dbpp, std::vector<ColumnFamilyHandle*>* cfh_vec,
                  VersionTimestamp (*decode)(std::string*))
 {
+  const std::string start = decode_00_0n(cp.smallest_user_key);
+  const std::string bound = decode_00_0n(cp.largest_user_key);
+  using namespace std::chrono;
+  auto t0 = steady_clock::now();
+  size_t bytes = 0, num = 0;
   std::string fpath = cp.cf_paths[0].path;
+{
   char buf[32];
   fpath.append(buf, sprintf(buf, "/job-%08d/ttl", cp.job_id));
   //OsFileStream fp(fpath, O_WRONLY|O_CREAT, 0777);
@@ -466,17 +472,12 @@ size_t write_ttl_file(const CompactionParams& cp,
   DB* db = *dbpp;
   ColumnFamilyHandle* cfh = (*cfh_vec)[0];
   std::unique_ptr<Iterator> iter(NewMetaIter(db, cfh, cp.smallest_seqno));
-  const std::string start = decode_00_0n(cp.smallest_user_key);
-  const std::string bound = decode_00_0n(cp.largest_user_key);
-  using namespace std::chrono;
-  auto t0 = steady_clock::now();
   if (start.empty()) {
     iter->SeekToFirst();
   } else {
     iter->Seek(start);
   }
   std::string meta_value;
-  size_t bytes = 0, num = 0;
   while (iter->Valid()) {
     Slice k = iter->key(); if (!bound.empty() && bound < k) break;
     Slice v = iter->value();
@@ -488,7 +489,7 @@ size_t write_ttl_file(const CompactionParams& cp,
     num++;
     iter->Next();
   }
-  dio.flush_buffer();
+}
   bytes += sizeof(VersionTimestamp) * num;
   auto t1 = steady_clock::now();
   double d = duration_cast<microseconds>(t1-t0).count()/1e6;
