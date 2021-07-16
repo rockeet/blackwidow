@@ -495,8 +495,8 @@ size_t write_ttl_file(const CompactionParams& cp,
   double d = duration_cast<microseconds>(t1-t0).count()/1e6;
   struct stat st = {};
   TERARK_VERIFY_S(lstat(fpath.c_str(), &st) == 0, // lstat must success
-       "job_id: %d: %s.%s lstat(%s) = %m", cp.job_id, type, fac.Name(), fpath);
-  INFO("job_id: %d: %s.%s.Serialize: tim %8.4f sec, %8.6f Mkv, %9.6f MB, zip %9.6f MB, start = %s, bound = %s",
+       "job-%08d: %s.%s lstat(%s) = %m", cp.job_id, type, fac.Name(), fpath);
+  INFO("job-%08d: %s.%s.Serialize: tim %8.4f sec, %8.6f Mkv, %9.6f MB, zip %9.6f MB, start = %s, bound = %s",
         cp.job_id, type, fac.Name(), d, num/1e6, bytes/1e6, st.st_size/1e6, start, bound);
   cp.extra_serde_files.push_back("ttl");
   return num;
@@ -544,14 +544,14 @@ struct DataFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
       else {
         kvs = 0;
         // now it is in DB Open, do not load ttlmap
-        DEBG("job_id: %d: %s.%s.Serialize: db is in opening",
+        DEBG("job-%08d: %s.%s.Serialize: db is in opening",
               job_id, fac.m_type.c_str(), fac.Name());
       }
       int64_t unix_time;
       rocksdb::Env::Default()->GetCurrentTime(&unix_time);
       dio << unix_time;
       dio << kvs;
-      DEBG("job_id: %d: %s.%s.Serialize: kvs = %zd, job raw = %.3f GB, zip = %.3f GB, smallest_seqno = %lld",
+      DEBG("job-%08d: %s.%s.Serialize: kvs = %zd, job raw = %.3f GB, zip = %.3f GB, smallest_seqno = %lld",
             job_id, fac.m_type.c_str(), fac.Name(), kvs, rawzip[0]/1e9, rawzip[1]/1e9, (llong)m_cp->smallest_seqno);
     }
   }
@@ -564,7 +564,7 @@ struct DataFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
       dio >> fac->unix_time_;
       dio >> fac->meta_ttl_num_;
       auto kvs = fac->meta_ttl_num_;
-      DEBG("job_id: %d: %s.%s.DeSerialize: kvs = %zd, job raw = %.3f GB, zip = %.3f GB, smallest_seqno = %lld",
+      DEBG("job-%08d: %s.%s.DeSerialize: kvs = %zd, job raw = %.3f GB, zip = %.3f GB, smallest_seqno = %lld",
             job_id, fac->m_type.c_str(), fac->Name(), kvs, rawzip[0]/1e9, rawzip[1]/1e9, (llong)m_cp->smallest_seqno);
     }
     else {
