@@ -597,8 +597,7 @@ struct BaseDataKeyDecoder : public UserKeyCoder {
            "The format is <strong>key:<em>version(datetime)</em>:field</strong>";
   }
   void Encode(Slice, std::string*) const override {
-    assert(!"Unexpected call");
-    THROW_InvalidArgument("Unexpected call");
+    TERARK_DIE("This function should not be called");
   }
   void Decode(Slice coded, std::string* de) const override {
     std::string tmp_s;
