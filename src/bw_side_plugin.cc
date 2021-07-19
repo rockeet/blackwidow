@@ -34,17 +34,15 @@ namespace blackwidow {
 using namespace rocksdb;
 using namespace terark;
 
-// prefix "%s" -- this "%s" is for following "", it is a placeholder
-// for empty __VA_ARGS__
-#define PrintLog(level, prefix, fmt, ...) \
+#define PrintLog(level, fmt, ...) \
   do { if (SidePluginRepo::DebugLevel() >= level) \
-    fprintf(stderr, prefix "%s" fmt "\n", \
-            TERARK_PP_SmartForPrintf("", ## __VA_ARGS__)); \
+    fprintf(stderr, "%s: " fmt "\n", \
+            TERARK_PP_SmartForPrintf(StrDateTimeNow(), ## __VA_ARGS__)); \
   } while (0)
-#define TRAC(...) PrintLog(4, "TRAC: ", __VA_ARGS__)
-#define DEBG(...) PrintLog(3, "DEBG: ", __VA_ARGS__)
-#define INFO(...) PrintLog(2, "INFO: ", __VA_ARGS__)
-#define WARN(...) PrintLog(1, "WARN: ", __VA_ARGS__)
+#define TRAC(...) PrintLog(4, "TRAC: " __VA_ARGS__)
+#define DEBG(...) PrintLog(3, "DEBG: " __VA_ARGS__)
+#define INFO(...) PrintLog(2, "INFO: " __VA_ARGS__)
+#define WARN(...) PrintLog(1, "WARN: " __VA_ARGS__)
 
 ROCKSDB_REG_DEFAULT_CONS( BaseMetaFilterFactory, CompactionFilterFactory);
 ROCKSDB_REG_DEFAULT_CONS(ListsMetaFilterFactory, CompactionFilterFactory);
