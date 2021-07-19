@@ -144,7 +144,7 @@ example:
 $(LIBRARY): $(LIBOBJECTS)
 	$(AM_V_AR)rm -f $@
 	$(AM_V_at)#$(AR) $(ARFLAGS) $@ $(LIBOBJECTS)
-	$(AM_V_at)$(LD) -shared -fPIC -o $@ $(LIBOBJECTS) $(LDFLAGS)
+	$(AM_V_at)$(LD) -shared -fPIC -o $@ $(LIBOBJECTS) -L${ROCKSDB_PATH} -lrocksdb $(LDFLAGS)
 
 clean:
 	make -C ./examples clean
