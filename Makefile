@@ -153,6 +153,7 @@ clean:
 	rm -rf $(CLEAN_FILES)
 	rm -rf $(LIBOUTPUT)
 	find . -name "*.[oda]*" -path "$(SRC_DIR)/*" -exec rm -rf {} \;
+	find . -name "*.so*" -path "$(SRC_DIR)/*" -exec rm -rf {} \;
 	find . -type f -regex ".*\.\(\(gcda\)\|\(gcno\)\)" -exec rm {} \;
 
 %.o: %.cc
