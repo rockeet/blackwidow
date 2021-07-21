@@ -116,12 +116,12 @@ LIBOBJECTS = $(LIB_SOURCES:.cc=.o)
 # if user didn't config LIBNAME, set the default
 ifeq ($(LIBNAME),)
 # we should only run blackwidow in production with DEBUG_LEVEL 0
-LIBNAME=libblackwidow
 ifeq ($(DEBUG_LEVEL),0)
-        LIBNAME=libblackwidow
+	MAYBE_DEBUG=
 else
-        LIBNAME=libblackwidow_debug
+	MAYBE_DEBUG=_debug
 endif
+LIBNAME=libblackwidow${MAYBE_DEBUG}
 endif
 LIBOUTPUT = ./lib
 dummy := $(shell mkdir -p $(LIBOUTPUT))
@@ -144,7 +144,7 @@ example:
 $(LIBRARY): $(LIBOBJECTS)
 	$(AM_V_AR)rm -f $@
 	$(AM_V_at)#$(AR) $(ARFLAGS) $@ $(LIBOBJECTS)
-	$(AM_V_at)$(LD) -shared -fPIC -o $@ $(LIBOBJECTS) -L${ROCKSDB_PATH} -lrocksdb $(LDFLAGS)
+	$(AM_V_at)$(LD) -shared -fPIC -o $@ $(LIBOBJECTS) -L${ROCKSDB_PATH} -lrocksdb${MAYBE_DEBUG} $(LDFLAGS)
 
 clean:
 	make -C ./examples clean
