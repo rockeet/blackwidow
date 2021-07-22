@@ -34,9 +34,17 @@ namespace blackwidow {
 using namespace rocksdb;
 using namespace terark;
 
+#if 0
+#define DoPrintLog(...) fprintf(stderr, __VA_ARGS__)
+#else
+#define DoPrintLog(...) \
+    info_log ? ROCKS_LOG_INFO(info_log, __VA_ARGS__) \
+             : (void)fprintf(stderr, __VA_ARGS__)
+#endif
+
 #define PrintLog(level, fmt, ...) \
   do { if (SidePluginRepo::DebugLevel() >= level) \
-    fprintf(stderr, "%s: " fmt "\n", \
+    DoPrintLog("%s: " fmt "\n", \
             TERARK_PP_SmartForPrintf(StrDateTimeNow(), ## __VA_ARGS__)); \
   } while (0)
 #define TRAC(...) PrintLog(4, "TRAC: " __VA_ARGS__)
@@ -69,6 +77,7 @@ struct FilterFac : public Base {
     if (this->db_ptr_ && this->cf_handles_ptr_) {
       return true;
     }
+    Logger* info_log = nullptr;
     std::lock_guard<std::mutex> lock(m_mtx);
     if (!this->db_ptr_) {
       //DB_MultiCF* dbm = (*m_repo)[m_type]; // this line crashes gdb
@@ -177,6 +186,7 @@ RegSimpleFilterFactorySerDe(StringsFilterFactory);
 DATA_IO_DUMP_RAW_MEM_E(VersionTimestamp);
 
 struct TTL_StreamReader {
+  Logger* info_log;
   //OsFileStream m_file;
   ProcPipeStream m_file;
   size_t meta_ttl_num_ = 0;
@@ -199,6 +209,7 @@ struct TTL_StreamReader {
     return 0 == c;
   }
   void OpenFile(const CompactionParams& cp) {
+    info_log = cp.info_log;
     // stick to dcompact_worker.cpp
     using std::string;
     static const string NFS_MOUNT_ROOT = GetDirFromEnv("NFS_MOUNT_ROOT", "/mnt/nfs");
@@ -453,6 +464,7 @@ size_t write_ttl_file(const CompactionParams& cp,
                  DB** dbpp, std::vector<ColumnFamilyHandle*>* cfh_vec,
                  VersionTimestamp (*decode)(std::string*))
 {
+  Logger* info_log = cp.info_log;
   const std::string start = decode_00_0n(cp.smallest_user_key);
   const std::string bound = decode_00_0n(cp.largest_user_key);
   using namespace std::chrono;
@@ -504,11 +516,13 @@ template<class Factory, class ParsedMetaValue>
 struct DataFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
   using ConcreteFactory = FilterFac<Factory>;
   const CompactionParams* m_cp;
+  rocksdb::Logger* info_log;
   int job_id;
   size_t rawzip[2];
   DataFilterFactorySerDe(const json& js, const SidePluginRepo& repo) {
     auto cp = JS_CompactionParamsDecodePtr(js);
     m_cp = cp;
+    info_log = cp->info_log;
 
     // pika requires 1==max_subcompactions, this makes all things simpler
     //
