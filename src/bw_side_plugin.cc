@@ -685,22 +685,4 @@ struct ListsDataKeyDecoder : public UserKeyCoder {
 ROCKSDB_REG_DEFAULT_CONS(ListsDataKeyDecoder, AnyPlugin);
 ROCKSDB_REG_AnyPluginManip("ListsDataKeyDecoder");
 
-struct  StringsDataKeyDecoder : public UserKeyCoder {
-  void Update(const json&, const SidePluginRepo&) override {
-  }
-  std::string ToString(const json&, const SidePluginRepo&) const override {
-    return "This is the StringsDataKeyDecoder.";
-  }
-  void Encode(Slice, std::string*) const override {
-    TERARK_DIE("This function should not be called");
-  }
-  void Decode(Slice coded, std::string* de) const override {
-    de->clear();
-    de->reserve(coded.size_);
-    HtmlAppendEscape(de, coded.data(), coded.size());
-  }
-};
-ROCKSDB_REG_DEFAULT_CONS(StringsDataKeyDecoder, AnyPlugin);
-ROCKSDB_REG_AnyPluginManip("StringsDataKeyDecoder");
-
 } // namespace blackwidow
