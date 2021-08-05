@@ -17,12 +17,18 @@
 
 namespace blackwidow {
 
+export class FilterCounter;
+
 class ListsMetaFilter : public rocksdb::CompactionFilter {
  public:
-  ListsMetaFilter() = default;
+  ListsMetaFilter() : factory(nullptr) {}
+  ~ListsMetaFilter() { factory->local_fc += this->fc; }
   bool Filter(int level, const rocksdb::Slice& key,
               const rocksdb::Slice& value,
               std::string* new_value, bool* value_changed) const override {
+
+    ++fc.exec_filter_times;
+
     int32_t cur_time = static_cast<int32_t>(unix_time);
     ParsedListsMetaValue parsed_lists_meta_value(value);
     Trace("==========================START==========================");
@@ -49,6 +55,9 @@ class ListsMetaFilter : public rocksdb::CompactionFilter {
   }
   int64_t unix_time;
 
+  mutable FilterCounter fc;
+  ListsMetaFilterFactory* factory;
+
   const char* Name() const override { return "ListsMetaFilter"; }
 };
 
@@ -61,6 +70,9 @@ class ListsMetaFilterFactory : public rocksdb::CompactionFilterFactory {
     return "ListsMetaFilterFactory";
   }
   int64_t unix_time_;
+
+  mutable FilterCounter local_fc;
+  mutable FilterCounter remote_fc;
 };
 
 class ListsDataFilter : public rocksdb::CompactionFilter {

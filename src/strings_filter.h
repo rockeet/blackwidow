@@ -15,12 +15,18 @@
 
 namespace blackwidow {
 
+export class FilterCounter;
+
 class StringsFilter : public rocksdb::CompactionFilter {
  public:
-  StringsFilter() = default;
+  StringsFilter() : factory(nullptr) {}
+  ~StringsFilter() { factory->local_fc += this->fc; }
   bool Filter(int level, const rocksdb::Slice& key,
               const rocksdb::Slice& value,
               std::string* new_value, bool* value_changed) const override {
+
+    ++fc.exec_filter_times;
+
     int32_t cur_time = static_cast<int32_t>(unix_time);
     ParsedStringsValue parsed_strings_value(value);
     Trace("==========================START==========================");
@@ -41,6 +47,9 @@ class StringsFilter : public rocksdb::CompactionFilter {
   }
   int64_t unix_time;
 
+  mutable FilterCounter fc;
+  StringsFilterFactory* factory;
+
   const char* Name() const override { return "StringsFilter"; }
 };
 
@@ -53,6 +62,9 @@ class StringsFilterFactory : public rocksdb::CompactionFilterFactory {
     return "StringsFilterFactory";
   }
   uint64_t unix_time_ = 0; // only used by compact worker
+
+  mutable FilterCounter local_fc;
+  mutable FilterCounter remote_fc;
 };
 
 }  //  namespace blackwidow

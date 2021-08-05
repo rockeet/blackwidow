@@ -132,6 +132,7 @@ static std::unique_ptr<CompactionFilter> Tpl_SimpleNewFilter(const Factory* fac)
   } else {
     rocksdb::Env::Default()->GetCurrentTime(&filter->unix_time);
   }
+  filter->factory = fac;  // give the Factory pointer to the filer
   return std::unique_ptr<CompactionFilter>(filter);
 }
 
@@ -686,3 +687,15 @@ ROCKSDB_REG_DEFAULT_CONS(ListsDataKeyDecoder, AnyPlugin);
 ROCKSDB_REG_AnyPluginManip("ListsDataKeyDecoder");
 
 } // namespace blackwidow
+
+
+struct FilterCounter {
+  size_t total_keys_num;
+  size_t total_vals_num;
+  size_t total_keys_size;
+  size_t total_vals_size;
+  size_t deleted_total_keys_num;
+  size_t deleted_not_found_keys_num;
+  size_t deleted_expired_keys_num;
+  size_t deleted_versions_old_keys;
+};
