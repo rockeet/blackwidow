@@ -24,6 +24,38 @@ using rocksdb::ColumnFamilyHandle;
 
 namespace blackwidow {
 
+class FilterCounter {
+public:
+  FilterCounter();
+  FilterCounter &operator+=(const FilterCounter &f);
+  size_t exec_filter_times;
+  size_t total_keys_num, total_vals_num;
+  size_t total_keys_size, total_vals_size;
+  size_t deleted_total_keys_num;
+  size_t deleted_not_found_keys_num;
+  size_t deleted_expired_keys_num;
+  size_t deleted_versions_old_keys_num;
+};
+
+FilterCounter::FilterCounter()
+    : exec_filter_times(0), total_keys_num(0), total_vals_num(0),
+      total_keys_size(0), total_vals_size(0), deleted_total_keys_num(0),
+      deleted_not_found_keys_num(0), deleted_expired_keys_num(0),
+      deleted_versions_old_keys_num(0) {}
+
+FilterCounter &FilterCounter::operator+=(const FilterCounter &f) {
+  this->exec_filter_times += f.exec_filter_times;
+  this->total_keys_num += f.total_keys_num;
+  this->total_vals_num += f.total_vals_num;
+  this->total_keys_size += f.total_keys_size;
+  this->total_vals_size += f.total_vals_size;
+  this->deleted_total_keys_num += f.deleted_total_keys_num;
+  this->deleted_not_found_keys_num += f.deleted_not_found_keys_num;
+  this->deleted_expired_keys_num += f.deleted_expired_keys_num;
+  this->deleted_versions_old_keys_num += f.deleted_versions_old_keys_num;
+  return *this;
+}
+
 rocksdb::Iterator* NewMetaIter(rocksdb::DB*, ColumnFamilyHandle*, uint64_t);
 
 class BaseMetaFilterFactory;
@@ -75,7 +107,7 @@ class BaseMetaFilter : public rocksdb::CompactionFilter {
 
 class BaseMetaFilterFactory : public rocksdb::CompactionFilterFactory {
  public:
-  BaseMetaFilterFactory() = default;
+  BaseMetaFilterFactory() {};
   std::unique_ptr<rocksdb::CompactionFilter> CreateCompactionFilter(
         const rocksdb::CompactionFilter::Context& context) override;
   const char* Name() const override {
