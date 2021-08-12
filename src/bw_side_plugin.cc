@@ -24,10 +24,12 @@
 #include "lists_filter.h"
 #include "zsets_filter.h"
 #include "strings_filter.h"
+#include "src/filter_counter.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+
 
 namespace blackwidow {
 
@@ -52,12 +54,15 @@ using namespace terark;
 #define INFO(...) PrintLog(2, "INFO: " __VA_ARGS__)
 #define WARN(...) PrintLog(1, "WARN: " __VA_ARGS__)
 
+
 ROCKSDB_REG_DEFAULT_CONS( BaseMetaFilterFactory, CompactionFilterFactory);
 ROCKSDB_REG_DEFAULT_CONS(ListsMetaFilterFactory, CompactionFilterFactory);
 ROCKSDB_REG_DEFAULT_CONS(  StringsFilterFactory, CompactionFilterFactory);
 
+
 BaseDataFilter::~BaseDataFilter() {
   delete iter_;
+  Add_and_Destructor_Mutex(factory, local_fc, 0, this->fc);
 }
 
 template<class Base>
@@ -125,7 +130,7 @@ ROCKSDB_FACTORY_REG("blackwidow.ZSetsScoreKeyComparator",
                              JS_ZSetsScoreKeyComparator);
 
 template<class ConcreteFilter, class Factory>
-static std::unique_ptr<CompactionFilter> Tpl_SimpleNewFilter(const Factory* fac) {
+static std::unique_ptr<CompactionFilter> Tpl_SimpleNewFilter(Factory* fac) {
   auto filter = new ConcreteFilter;
   if (IsCompactionWorker()) {
     filter->unix_time = fac->unix_time_;
@@ -149,14 +154,17 @@ ListsMetaFilterFactory::CreateCompactionFilter(const CompactionFilterContext&) {
   return Tpl_SimpleNewFilter<ListsMetaFilter>(this);
 }
 
+
+DATA_IO_DUMP_RAW_MEM_E(FilterCounter)
+
 template<class ConcreteFactory>
 struct SimpleFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
   void Serialize(FILE* output, const CompactionFilterFactory& base)
   const override {
-    //auto& fac = dynamic_cast<const ConcreteFactory&>(base);
+    auto& fac = dynamic_cast<const ConcreteFactory&>(base);
     LittleEndianDataOutput<NonOwnerFileStream> dio(output);
     if (IsCompactionWorker()) {
-      // do nothing
+      dio << fac.local_fc;
     }
     else {
       int64_t unix_time;
@@ -167,12 +175,14 @@ struct SimpleFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
   void DeSerialize(FILE* reader, CompactionFilterFactory* base)
   const override {
     auto fac = dynamic_cast<ConcreteFactory*>(base);
+    LittleEndianDataInput<NonOwnerFileStream> dio(reader);
     if (IsCompactionWorker()) {
-      LittleEndianDataInput<NonOwnerFileStream> dio(reader);
       dio >> fac->unix_time_;
     }
     else {
-      // do nothing
+      FilterCounter temp_fc;
+      dio >> temp_fc;
+      Add_and_Destructor_Mutex(fac, remote_fc, 1, temp_fc);
     }
   }
 };
@@ -234,6 +244,9 @@ public:
   bool Filter(int level, const Slice& key,
               const rocksdb::Slice& value,
               std::string* new_value, bool* value_changed) const override {
+
+    ++fc.exec_filter_times;
+
     ParsedBaseDataKey parsed_base_data_key(key, &parse_key_buf_);
     Trace("==========================START==========================");
     Trace("[DataFilter], key: %s, data = %s, version = %d",
@@ -255,17 +268,20 @@ public:
 
     if (meta_not_found_) {
       Trace("Drop[Meta key not exist]");
+      ++fc.deleted_not_found_keys_num;
       return true;
     }
 
     if (cur_meta_timestamp_ != 0
       && cur_meta_timestamp_ < static_cast<int32_t>(unix_time)) {
       Trace("Drop[Timeout]");
+      ++fc.deleted_expired_keys_num;
       return true;
     }
 
     if (cur_meta_version_ > parsed_base_data_key.version()) {
       Trace("Drop[data_key_version < cur_meta_version]");
+      ++fc.deleted_versions_old_keys_num;
       return true;
     } else {
       Trace("Reserve[data_key_version == cur_meta_version]");
@@ -282,6 +298,9 @@ public:
   bool Filter(int level, const Slice& key,
               const rocksdb::Slice& value,
               std::string* new_value, bool* value_changed) const override {
+              
+    ++fc.exec_filter_times;
+
     ParsedListsDataKey parsed_lists_data_key(key, &parse_key_buf_);
     Trace("==========================START==========================");
     Trace("[DataFilter], key: %s, index = %lu, data = %s, version = %d",
@@ -304,17 +323,20 @@ public:
 
     if (meta_not_found_) {
       Trace("Drop[Meta key not exist]");
+      ++fc.deleted_not_found_keys_num;
       return true;
     }
 
     if (cur_meta_timestamp_ != 0
       && cur_meta_timestamp_ < static_cast<int32_t>(unix_time)) {
       Trace("Drop[Timeout]");
+      ++fc.deleted_expired_keys_num;
       return true;
     }
 
     if (cur_meta_version_ > parsed_lists_data_key.version()) {
       Trace("Drop[list_data_key_version < cur_meta_version]");
+      ++fc.deleted_versions_old_keys_num;
       return true;
     } else {
       Trace("Reserve[list_data_key_version == cur_meta_version]");
@@ -331,6 +353,9 @@ public:
   bool Filter(int level, const Slice& key,
               const rocksdb::Slice& value,
               std::string* new_value, bool* value_changed) const override {
+
+    ++fc.exec_filter_times;
+
     ParsedZSetsScoreKey parsed_zsets_score_key(key, &parse_key_buf_);
     Trace("==========================START==========================");
     Trace("[ScoreFilter], key: %s, score = %lf, member = %s, version = %d",
@@ -353,16 +378,19 @@ public:
 
     if (meta_not_found_) {
       Trace("Drop[Meta key not exist]");
+      ++fc.deleted_not_found_keys_num;
       return true;
     }
 
     if (cur_meta_timestamp_ != 0 &&
         cur_meta_timestamp_ < static_cast<int32_t>(unix_time)) {
       Trace("Drop[Timeout]");
+      ++fc.deleted_expired_keys_num;
       return true;
     }
     if (cur_meta_version_ > parsed_zsets_score_key.version()) {
       Trace("Drop[score_key_version < cur_meta_version]");
+      ++fc.deleted_versions_old_keys_num;
       return true;
     } else {
       Trace("Reserve[score_key_version == cur_meta_version]");
@@ -379,6 +407,7 @@ HosterSideNewFilter(Factory* fac, const CompactionFilterContext& ctx) {
     auto filter = new HosterFilter(dbp ? *dbp : NULL, fac->cf_handles_ptr_);
     filter->smallest_seqno_ = ctx.smallest_seqno;
     rocksdb::Env::Default()->GetCurrentTime(&filter->unix_time);
+    filter->factory = fac;  // give the Factory pointer to the filer
     return std::unique_ptr<CompactionFilter>(filter);
 }
 
@@ -390,6 +419,7 @@ SideNewFilter(Factory* fac, const CompactionFilterContext& ctx) {
     filter->unix_time = fac->unix_time_;
     filter->m_ttl.OpenFile(*fac->m_cp);
     filter->m_ttl.meta_ttl_num_ = fac->meta_ttl_num_;
+    filter->factory = fac;  // give the Factory pointer to the filer
     return std::unique_ptr<CompactionFilter>(filter);
   } else {
     fac->TrySetDBptr();
@@ -546,7 +576,7 @@ struct DataFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
     auto& fac = dynamic_cast<const ConcreteFactory&>(base);
     LittleEndianDataOutput<NonOwnerFileStream> dio(output);
     if (IsCompactionWorker()) {
-      // do nothing
+      dio << fac.local_fc;
     }
     else {
       size_t kvs; // meta_ttl_num_
@@ -571,9 +601,9 @@ struct DataFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
   void DeSerialize(FILE* reader, CompactionFilterFactory* base)
   const override {
     auto fac = dynamic_cast<ConcreteFactory*>(base);
+    LittleEndianDataInput<NonOwnerFileStream> dio(reader);
     if (IsCompactionWorker()) {
       fac->m_cp = this->m_cp;
-      LittleEndianDataInput<NonOwnerFileStream> dio(reader);
       dio >> fac->unix_time_;
       dio >> fac->meta_ttl_num_;
       auto kvs = fac->meta_ttl_num_;
@@ -581,7 +611,9 @@ struct DataFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
             job_id, fac->m_type.c_str(), fac->Name(), kvs, rawzip[0]/1e9, rawzip[1]/1e9, (llong)m_cp->smallest_seqno);
     }
     else {
-      // do nothing
+      FilterCounter temp_fc;
+      dio >> temp_fc;
+      Add_and_Destructor_Mutex(fac, remote_fc, 1, temp_fc);
     }
   }
 };
@@ -686,16 +718,50 @@ struct ListsDataKeyDecoder : public UserKeyCoder {
 ROCKSDB_REG_DEFAULT_CONS(ListsDataKeyDecoder, AnyPlugin);
 ROCKSDB_REG_AnyPluginManip("ListsDataKeyDecoder");
 
-} // namespace blackwidow
-
-
-struct FilterCounter {
-  size_t total_keys_num;
-  size_t total_vals_num;
-  size_t total_keys_size;
-  size_t total_vals_size;
-  size_t deleted_total_keys_num;
-  size_t deleted_not_found_keys_num;
-  size_t deleted_expired_keys_num;
-  size_t deleted_versions_old_keys;
+template <class FilterFactory>
+struct FilterFactory_Manip : PluginManipFunc<CompactionFilterFactory>  {
+  void Update(rocksdb::CompactionFilterFactory*, const json& js,
+              const SidePluginRepo& repo) const final {
+  }
+  std::string ToString(const CompactionFilterFactory& fac, const json& dump_options,
+                       const SidePluginRepo&) const final {
+    if (auto f = dynamic_cast<const FilterFactory*>(&fac)) {
+      FilterCounter& fc = f->local_fc;
+      json js;
+      js["exec_filter_times"] = fc.exec_filter_times;
+      js["reserved_kv"]["total_num"] = fc.total_reserved_kv_num;
+      js["reserved_kv"]["total_size"] = SizeToString(fc.total_reserved_keys_size +
+                                fc.total_reserved_vals_size);
+      js["reserved_kv"]["keys_size"] = SizeToString(fc.total_reserved_keys_size);
+      js["reserved_kv"]["vals_size"] = SizeToString(fc.total_reserved_vals_size);
+      js["deleted_kv"]["reasons"]["not_found"] = fc.deleted_not_found_keys_num;
+      js["deleted_kv"]["reasons"]["expired"] = fc.deleted_expired_keys_num;
+      js["deleted_kv"]["reasons"]["versions_old"] = fc.deleted_versions_old_keys_num; \
+      js["deleted_kv"]["overview"]["total_num"] = fc.deleted_not_found_keys_num +
+                               fc.deleted_expired_keys_num +
+                               fc.deleted_versions_old_keys_num;
+      js["deleted_kv"]["overview"]["total_keys_size"] = SizeToString(fc.total_deleted_keys_size);
+      js["deleted_kv"]["overview"]["total_vals_size"] = SizeToString(fc.total_deleted_vals_size);
+      js["deleted_kv"]["overview"]["total_vals_size"] = SizeToString(fc.total_deleted_vals_size);
+      return JsonToString(js, dump_options);
+    }
+    THROW_InvalidArgument("Unknow CompactionFilterFactory");
+  }
 };
+
+typedef FilterFactory_Manip<BaseMetaFilterFactory> BaseMetaFilterFactory_Manip;
+typedef FilterFactory_Manip<BaseDataFilterFactory> BaseDataFilterFactory_Manip;
+typedef FilterFactory_Manip<ListsMetaFilterFactory> ListsMetaFilterFactory_Manip;
+typedef FilterFactory_Manip<ListsDataFilterFactory> ListsDataFilterFactory_Manip;
+typedef FilterFactory_Manip<ZSetsScoreFilterFactory> ZSetsScoreFilterFactory_Manip;
+typedef FilterFactory_Manip<StringsFilterFactory> StringsFilterFactory_Manip;
+
+ROCKSDB_REG_PluginManip("BaseMetaFilterFactory", BaseMetaFilterFactory_Manip);
+ROCKSDB_REG_PluginManip("BaseDataFilterFactory", BaseDataFilterFactory_Manip);
+ROCKSDB_REG_PluginManip("ListsMetaFilterFactory", ListsMetaFilterFactory_Manip);
+ROCKSDB_REG_PluginManip("ListsDataFilterFactory", ListsDataFilterFactory_Manip);
+ROCKSDB_REG_PluginManip("ZSetsScoreFilterFactory", ZSetsScoreFilterFactory_Manip);
+ROCKSDB_REG_PluginManip("StringsFilterFactory", StringsFilterFactory_Manip);
+
+
+} // namespace blackwidow

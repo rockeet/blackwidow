@@ -13,14 +13,29 @@
 #include "rocksdb/compaction_filter.h"
 #include "src/debug.h"
 
+#include "src/filter_counter.h"
+
 namespace blackwidow {
 
-export class FilterCounter;
+class StringsFilterFactory : public rocksdb::CompactionFilterFactory {
+ public:
+  StringsFilterFactory() = default;
+  std::unique_ptr<rocksdb::CompactionFilter> CreateCompactionFilter(
+    const rocksdb::CompactionFilter::Context& context) override;
+  const char* Name() const override {
+    return "StringsFilterFactory";
+  }
+  uint64_t unix_time_ = 0; // only used by compact worker
+
+  mutable FilterCounter local_fc;
+  mutable FilterCounter remote_fc;
+  std::mutex mtx[2];
+};
 
 class StringsFilter : public rocksdb::CompactionFilter {
  public:
   StringsFilter() : factory(nullptr) {}
-  ~StringsFilter() { factory->local_fc += this->fc; }
+  ~StringsFilter() { Add_and_Destructor_Mutex(factory, local_fc, 0, this->fc); }
   bool Filter(int level, const rocksdb::Slice& key,
               const rocksdb::Slice& value,
               std::string* new_value, bool* value_changed) const override {
@@ -39,9 +54,12 @@ class StringsFilter : public rocksdb::CompactionFilter {
     if (parsed_strings_value.timestamp() != 0
       && parsed_strings_value.timestamp() < cur_time) {
       Trace("Drop[Stale]");
+      ++fc.deleted_expired_keys_num;
+      fc.count_deleted_kv(key, value);
       return true;
     } else {
       Trace("Reserve");
+      fc.count_reserved_kv(key, value);
       return false;
     }
   }
@@ -51,20 +69,6 @@ class StringsFilter : public rocksdb::CompactionFilter {
   StringsFilterFactory* factory;
 
   const char* Name() const override { return "StringsFilter"; }
-};
-
-class StringsFilterFactory : public rocksdb::CompactionFilterFactory {
- public:
-  StringsFilterFactory() = default;
-  std::unique_ptr<rocksdb::CompactionFilter> CreateCompactionFilter(
-    const rocksdb::CompactionFilter::Context& context) override;
-  const char* Name() const override {
-    return "StringsFilterFactory";
-  }
-  uint64_t unix_time_ = 0; // only used by compact worker
-
-  mutable FilterCounter local_fc;
-  mutable FilterCounter remote_fc;
 };
 
 }  //  namespace blackwidow

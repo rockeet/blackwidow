@@ -19,88 +19,6 @@
 
 namespace blackwidow {
 
-class ZSetsScoreFilter : public rocksdb::CompactionFilter {
- public:
-  ZSetsScoreFilter(rocksdb::DB* db,
-                   std::vector<rocksdb::ColumnFamilyHandle*>* handles_ptr) :
-    db_(db),
-    cf_handles_ptr_(handles_ptr),
-    meta_not_found_(false),
-    cur_meta_version_(0),
-    cur_meta_timestamp_(0) {}
-
-  bool Filter(int level, const rocksdb::Slice& key,
-              const rocksdb::Slice& value,
-              std::string* new_value,
-              bool* value_changed) const override {
-    if (nullptr == db_ || nullptr == cf_handles_ptr_) {
-      return false;
-    }
-    ParsedZSetsScoreKey parsed_zsets_score_key(key, &parse_key_buf_);
-    Trace("==========================START==========================");
-    Trace("[ScoreFilter], key: %s, score = %lf, member = %s, version = %d",
-          parsed_zsets_score_key.key().ToString().c_str(),
-          parsed_zsets_score_key.score(),
-          parsed_zsets_score_key.member().ToString().c_str(),
-          parsed_zsets_score_key.version());
-
-    if (parsed_zsets_score_key.key().ToString() != cur_key_) {
-      cur_key_ = parsed_zsets_score_key.key().ToString();
-      std::string meta_value;
-      // destroyed when close the database, Reserve Current key value
-      if (cf_handles_ptr_->size() == 0) {
-        return false;
-      }
-      Status s = db_->Get(default_read_options_,
-              (*cf_handles_ptr_)[0], cur_key_, &meta_value);
-      if (s.ok()) {
-        meta_not_found_ = false;
-        ParsedZSetsMetaValue parsed_zsets_meta_value(&meta_value);
-        cur_meta_version_ = parsed_zsets_meta_value.version();
-        cur_meta_timestamp_ = parsed_zsets_meta_value.timestamp();
-      } else if (s.IsNotFound()) {
-        meta_not_found_ = true;
-      } else {
-        cur_key_ = "";
-        Trace("Reserve[Get meta_key faild]");
-        return false;
-      }
-    }
-
-    if (meta_not_found_) {
-      Trace("Drop[Meta key not exist]");
-      return true;
-    }
-
-    if (cur_meta_timestamp_ != 0 &&
-        cur_meta_timestamp_ < static_cast<int32_t>(unix_time)) {
-      Trace("Drop[Timeout]");
-      return true;
-    }
-    if (cur_meta_version_ > parsed_zsets_score_key.version()) {
-      Trace("Drop[score_key_version < cur_meta_version]");
-      return true;
-    } else {
-      Trace("Reserve[score_key_version == cur_meta_version]");
-      return false;
-    }
-  }
-  int64_t unix_time;
-
-  const char* Name() const override { return "ZSetsScoreFilter";}
-
-  rocksdb::DB* db_;
-  mutable rocksdb::Iterator* iter_ = nullptr;
-  mutable uint64_t smallest_seqno_;
-  std::vector<rocksdb::ColumnFamilyHandle*>* cf_handles_ptr_;
-  rocksdb::ReadOptions default_read_options_;
-  mutable std::string parse_key_buf_;
-  mutable std::string cur_key_;
-  mutable bool meta_not_found_;
-  mutable int32_t cur_meta_version_;
-  mutable int32_t cur_meta_timestamp_;
-};
-
 class ZSetsScoreFilterFactory : public rocksdb::CompactionFilterFactory {
  public:
   ZSetsScoreFilterFactory() : ZSetsScoreFilterFactory(nullptr, nullptr) {}
@@ -119,7 +37,110 @@ class ZSetsScoreFilterFactory : public rocksdb::CompactionFilterFactory {
   std::vector<rocksdb::ColumnFamilyHandle*>* cf_handles_ptr_;
   uint64_t unix_time_;
   size_t meta_ttl_num_;
+
+  mutable FilterCounter local_fc;
+  mutable FilterCounter remote_fc;
+  std::mutex mtx[2];
 };
+
+class ZSetsScoreFilter : public rocksdb::CompactionFilter {
+ public:
+  ZSetsScoreFilter(rocksdb::DB* db,
+                   std::vector<rocksdb::ColumnFamilyHandle*>* handles_ptr) :
+    db_(db),
+    cf_handles_ptr_(handles_ptr),
+    meta_not_found_(false),
+    cur_meta_version_(0),
+    cur_meta_timestamp_(0) {}
+  ~ZSetsScoreFilter() { Add_and_Destructor_Mutex(factory, local_fc, 0, this->fc); }
+
+  bool Filter(int level, const rocksdb::Slice& key,
+              const rocksdb::Slice& value,
+              std::string* new_value,
+              bool* value_changed) const override {
+
+    ++fc.exec_filter_times;
+
+    if (nullptr == db_ || nullptr == cf_handles_ptr_) {
+      return false;
+    }
+    ParsedZSetsScoreKey parsed_zsets_score_key(key, &parse_key_buf_);
+    Trace("==========================START==========================");
+    Trace("[ScoreFilter], key: %s, score = %lf, member = %s, version = %d",
+          parsed_zsets_score_key.key().ToString().c_str(),
+          parsed_zsets_score_key.score(),
+          parsed_zsets_score_key.member().ToString().c_str(),
+          parsed_zsets_score_key.version());
+
+    if (parsed_zsets_score_key.key().ToString() != cur_key_) {
+      cur_key_ = parsed_zsets_score_key.key().ToString();
+      std::string meta_value;
+      // destroyed when close the database, Reserve Current key value
+      if (cf_handles_ptr_->size() == 0) {
+        fc.count_reserved_kv(key, value);
+        return false;
+      }
+      Status s = db_->Get(default_read_options_,
+              (*cf_handles_ptr_)[0], cur_key_, &meta_value);
+      if (s.ok()) {
+        meta_not_found_ = false;
+        ParsedZSetsMetaValue parsed_zsets_meta_value(&meta_value);
+        cur_meta_version_ = parsed_zsets_meta_value.version();
+        cur_meta_timestamp_ = parsed_zsets_meta_value.timestamp();
+      } else if (s.IsNotFound()) {
+        meta_not_found_ = true;
+      } else {
+        cur_key_ = "";
+        Trace("Reserve[Get meta_key faild]");
+        fc.count_reserved_kv(key, value);
+        return false;
+      }
+    }
+
+    if (meta_not_found_) {
+      Trace("Drop[Meta key not exist]");
+      ++fc.deleted_not_found_keys_num;
+      fc.count_deleted_kv(key, value);
+      return true;
+    }
+
+    if (cur_meta_timestamp_ != 0 &&
+        cur_meta_timestamp_ < static_cast<int32_t>(unix_time)) {
+      Trace("Drop[Timeout]");
+      ++fc.deleted_expired_keys_num;
+      fc.count_deleted_kv(key, value);
+      return true;
+    }
+    if (cur_meta_version_ > parsed_zsets_score_key.version()) {
+      Trace("Drop[score_key_version < cur_meta_version]");
+      ++fc.deleted_versions_old_keys_num;
+      fc.count_deleted_kv(key, value);
+      return true;
+    } else {
+      Trace("Reserve[score_key_version == cur_meta_version]");
+      fc.count_reserved_kv(key, value);
+      return false;
+    }
+  }
+  int64_t unix_time;
+
+  mutable FilterCounter fc;
+  ZSetsScoreFilterFactory* factory;
+
+  const char* Name() const override { return "ZSetsScoreFilter";}
+
+  rocksdb::DB* db_;
+  mutable rocksdb::Iterator* iter_ = nullptr;
+  mutable uint64_t smallest_seqno_;
+  std::vector<rocksdb::ColumnFamilyHandle*>* cf_handles_ptr_;
+  rocksdb::ReadOptions default_read_options_;
+  mutable std::string parse_key_buf_;
+  mutable std::string cur_key_;
+  mutable bool meta_not_found_;
+  mutable int32_t cur_meta_version_;
+  mutable int32_t cur_meta_timestamp_;
+};
+
 
 }  //  namespace blackwidow
 #endif  // SRC_ZSETS_FILTER_H_

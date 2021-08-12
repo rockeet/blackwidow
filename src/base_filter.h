@@ -15,51 +15,39 @@
 #include "src/base_data_key_format.h"
 #include "rocksdb/compaction_filter.h"
 
+#include "src/filter_counter.h"
+#include <topling/side_plugin_factory.h>
+
 namespace rocksdb {
   class ColumnFamilyHandle;
 }
 using rocksdb::ColumnFamilyHandle;
 
+using namespace nlohmann;
+
 namespace blackwidow {
 
-class FilterCounter {
-public:
-  FilterCounter();
-  FilterCounter &operator+=(const FilterCounter &f);
-  size_t exec_filter_times;
-  size_t total_keys_num, total_vals_num;
-  size_t total_keys_size, total_vals_size;
-  size_t deleted_total_keys_num;
-  size_t deleted_not_found_keys_num;
-  size_t deleted_expired_keys_num;
-  size_t deleted_versions_old_keys_num;
-};
-
-FilterCounter::FilterCounter()
-    : exec_filter_times(0), total_keys_num(0), total_vals_num(0),
-      total_keys_size(0), total_vals_size(0), deleted_total_keys_num(0),
-      deleted_not_found_keys_num(0), deleted_expired_keys_num(0),
-      deleted_versions_old_keys_num(0) {}
-
-FilterCounter &FilterCounter::operator+=(const FilterCounter &f) {
-  this->exec_filter_times += f.exec_filter_times;
-  this->total_keys_num += f.total_keys_num;
-  this->total_vals_num += f.total_vals_num;
-  this->total_keys_size += f.total_keys_size;
-  this->total_vals_size += f.total_vals_size;
-  this->deleted_total_keys_num += f.deleted_total_keys_num;
-  this->deleted_not_found_keys_num += f.deleted_not_found_keys_num;
-  this->deleted_expired_keys_num += f.deleted_expired_keys_num;
-  this->deleted_versions_old_keys_num += f.deleted_versions_old_keys_num;
-  return *this;
-}
-
 rocksdb::Iterator* NewMetaIter(rocksdb::DB*, ColumnFamilyHandle*, uint64_t);
+
+class BaseMetaFilterFactory : public rocksdb::CompactionFilterFactory {
+ public:
+  BaseMetaFilterFactory() = default;
+  std::unique_ptr<rocksdb::CompactionFilter> CreateCompactionFilter(
+        const rocksdb::CompactionFilter::Context& context) override;
+  const char* Name() const override {
+    return "BaseMetaFilterFactory";
+  }
+  uint64_t unix_time_ = 0; // only used by compact worker
+
+  mutable FilterCounter local_fc;
+  mutable FilterCounter remote_fc;
+  std::mutex mtx[2];
+};
 
 class BaseMetaFilter : public rocksdb::CompactionFilter {
  public:
   BaseMetaFilter() : factory(nullptr) {}
-  ~BaseMetaFilter() { factory->local_fc += this->fc; }
+  ~BaseMetaFilter() { Add_and_Destructor_Mutex(factory, local_fc, 0, this->fc); }
   bool Filter(int level, const rocksdb::Slice& key,
               const rocksdb::Slice& value,
               std::string* new_value, bool* value_changed) const override {
@@ -79,15 +67,20 @@ class BaseMetaFilter : public rocksdb::CompactionFilter {
     if (parsed_base_meta_value.timestamp() != 0
       && parsed_base_meta_value.timestamp() < cur_time
       && parsed_base_meta_value.version() < cur_time) {
+      ++fc.deleted_expired_keys_num;
       Trace("Drop[Stale & version < cur_time]");
+      fc.count_deleted_kv(key, value);
       return true;
     }
     if (parsed_base_meta_value.count() == 0
       && parsed_base_meta_value.version() < cur_time) {
+      ++fc.deleted_versions_old_keys_num;
       Trace("Drop[Empty & version < cur_time]");
+      fc.count_deleted_kv(key, value);
       return true;
     }
     Trace("Reserve");
+    fc.count_reserved_kv(key, value);
     return false;
   }
   int64_t unix_time = 0;
@@ -98,18 +91,28 @@ class BaseMetaFilter : public rocksdb::CompactionFilter {
   const char* Name() const override { return "BaseMetaFilter"; }
 };
 
-class BaseMetaFilterFactory : public rocksdb::CompactionFilterFactory {
+
+class BaseDataFilterFactory : public rocksdb::CompactionFilterFactory {
  public:
-  BaseMetaFilterFactory() {};
-  std::unique_ptr<rocksdb::CompactionFilter> CreateCompactionFilter(
-        const rocksdb::CompactionFilter::Context& context) override;
-  const char* Name() const override {
-    return "BaseMetaFilterFactory";
+  BaseDataFilterFactory() : BaseDataFilterFactory(nullptr, nullptr) {}
+  BaseDataFilterFactory(rocksdb::DB** db_ptr,
+                        std::vector<rocksdb::ColumnFamilyHandle*>* handles_ptr)
+      : db_ptr_(db_ptr), cf_handles_ptr_(handles_ptr) {
   }
-  uint64_t unix_time_ = 0; // only used by compact worker
+  std::unique_ptr<rocksdb::CompactionFilter> CreateCompactionFilter(
+    const rocksdb::CompactionFilter::Context&) override;
+  const char* Name() const override {
+    return "BaseDataFilterFactory";
+  }
+
+  rocksdb::DB** db_ptr_;
+  std::vector<rocksdb::ColumnFamilyHandle*>* cf_handles_ptr_;
+  uint64_t unix_time_;
+  size_t meta_ttl_num_;
 
   mutable FilterCounter local_fc;
   mutable FilterCounter remote_fc;
+  std::mutex mtx[2];
 };
 
 class BaseDataFilter : public rocksdb::CompactionFilter {
@@ -128,7 +131,7 @@ class BaseDataFilter : public rocksdb::CompactionFilter {
               const rocksdb::Slice& value,
               std::string* new_value, bool* value_changed) const override {
     
-    // ++fc.exec_filter_times;
+    ++fc.exec_filter_times;
 
     if (nullptr == db_ || nullptr == cf_handles_ptr_) {
       return false;
@@ -145,6 +148,7 @@ class BaseDataFilter : public rocksdb::CompactionFilter {
       std::string meta_value;
       // destroyed when close the database, Reserve Current key value
       if (cf_handles_ptr_->size() == 0) {
+        fc.count_reserved_kv(key, value);
         return false;
       }
     #if 0
@@ -182,36 +186,41 @@ class BaseDataFilter : public rocksdb::CompactionFilter {
       } else {
         cur_key_ = "";
         Trace("Reserve[Get meta_key faild]");
+        fc.count_reserved_kv(key, value);
         return false;
       }
     }
 
     if (meta_not_found_) {
       Trace("Drop[Meta key not exist]");
-      // ++fc.deleted_not_found_keys_num;
+      ++fc.deleted_not_found_keys_num;
+      fc.count_deleted_kv(key, value);
       return true;
     }
 
     if (cur_meta_timestamp_ != 0
       && cur_meta_timestamp_ < static_cast<int32_t>(unix_time)) {
       Trace("Drop[Timeout]");
-      // ++fc.deleted_expired_keys_num;
+      ++fc.deleted_expired_keys_num;
+      fc.count_deleted_kv(key, value);
       return true;
     }
 
     if (cur_meta_version_ > parsed_base_data_key.version()) {
       Trace("Drop[data_key_version < cur_meta_version]");
-      // ++fc.deleted_versions_old_keys_num;
+      ++fc.deleted_versions_old_keys_num;
+      fc.count_deleted_kv(key, value);
       return true;
     } else {
       Trace("Reserve[data_key_version == cur_meta_version]");
+      fc.count_reserved_kv(key, value);
       return false;
     }
   }
   int64_t unix_time;
 
-  // mutable FilterCounter fc;
-  // BaseDataFilterFactory* factory;
+  mutable FilterCounter fc;
+  BaseDataFilterFactory* factory;
 
   const char* Name() const override { return "BaseDataFilter"; }
 
@@ -225,28 +234,6 @@ class BaseDataFilter : public rocksdb::CompactionFilter {
   mutable bool meta_not_found_;
   mutable int32_t cur_meta_version_;
   mutable int32_t cur_meta_timestamp_;
-};
-
-class BaseDataFilterFactory : public rocksdb::CompactionFilterFactory {
- public:
-  BaseDataFilterFactory() : BaseDataFilterFactory(nullptr, nullptr) {}
-  BaseDataFilterFactory(rocksdb::DB** db_ptr,
-                        std::vector<rocksdb::ColumnFamilyHandle*>* handles_ptr)
-      : db_ptr_(db_ptr), cf_handles_ptr_(handles_ptr) {
-  }
-  std::unique_ptr<rocksdb::CompactionFilter> CreateCompactionFilter(
-    const rocksdb::CompactionFilter::Context&) override;
-  const char* Name() const override {
-    return "BaseDataFilterFactory";
-  }
-
-  rocksdb::DB** db_ptr_;
-  std::vector<rocksdb::ColumnFamilyHandle*>* cf_handles_ptr_;
-  uint64_t unix_time_;
-  size_t meta_ttl_num_;
-
-  mutable FilterCounter local_fc;
-  mutable FilterCounter remote_fc;
 };
 
 typedef BaseMetaFilter HashesMetaFilter;
