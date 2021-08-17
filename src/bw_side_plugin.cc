@@ -719,49 +719,168 @@ ROCKSDB_REG_DEFAULT_CONS(ListsDataKeyDecoder, AnyPlugin);
 ROCKSDB_REG_AnyPluginManip("ListsDataKeyDecoder");
 
 template <class FilterFactory>
-struct FilterFactory_Manip : PluginManipFunc<CompactionFilterFactory>  {
-  void Update(rocksdb::CompactionFilterFactory*, const json& js,
-              const SidePluginRepo& repo) const final {
-  }
-  std::string ToString(const CompactionFilterFactory& fac, const json& dump_options,
-                       const SidePluginRepo&) const final {
-    if (auto f = dynamic_cast<const FilterFactory*>(&fac)) {
-      FilterCounter& local_fc = f->local_fc;
-      FilterCounter& remote_fc = f->remote_fc;
+struct FilterFactory_Manip : PluginManipFunc<CompactionFilterFactory> {
+  void Update(rocksdb::CompactionFilterFactory *, const json &js,
+              const SidePluginRepo &repo) const final {}
+  std::string ToString(const CompactionFilterFactory &fac,
+                       const json &dump_options,
+                       const SidePluginRepo &) const final {
+    if (auto f = dynamic_cast<const FilterFactory *>(&fac)) {
+      FilterCounter &local_fc = f->local_fc;
+      FilterCounter &remote_fc = f->remote_fc;
+
+      bool metric = JsonSmartBool(dump_options, "metric", false);
+      if (metric) {
+        std::ostringstream oss;
+        oss << "local:exec_filter_times " << local_fc.exec_filter_times << '\n';
+        oss << "local:reserved_kv:total_num " << local_fc.total_reserved_kv_num
+            << '\n';
+        oss << "local:reserved_kv:total_size "
+            << local_fc.total_reserved_keys_size +
+                   local_fc.total_reserved_vals_size
+            << '\n';
+        oss << "local:reserved_kv:keys_size "
+            << local_fc.total_reserved_keys_size << '\n';
+        oss << "local:reserved_kv:vals_size "
+            << local_fc.total_reserved_vals_size << '\n';
+        oss << "local:deleted_kv:reasons:not_found "
+            << local_fc.deleted_not_found_keys_num << '\n';
+        oss << "local:deleted_kv:reasons:expired "
+            << local_fc.deleted_expired_keys_num << '\n';
+        oss << "local:deleted_kv:reasons:versions_old "
+            << local_fc.deleted_versions_old_keys_num << '\n';
+        oss << "local:deleted_kv:overview:total_num "
+            << local_fc.deleted_not_found_keys_num +
+                   local_fc.deleted_expired_keys_num +
+                   local_fc.deleted_versions_old_keys_num
+            << '\n';
+        oss << "local:deleted_kv:overview:total_keys_size "
+            << local_fc.total_deleted_keys_size << '\n';
+        oss << "local:deleted_kv:overview:total_vals_size "
+            << local_fc.total_deleted_vals_size << '\n';
+        oss << "local:deleted_kv:overview:total_vals_size "
+            << local_fc.total_deleted_vals_size << '\n';
+
+        oss << "remote:exec_filter_times " << remote_fc.exec_filter_times
+            << '\n';
+        oss << "remote:reserved_kv:total_num "
+            << remote_fc.total_reserved_kv_num << '\n';
+        oss << "remote:reserved_kv:total_size "
+            << remote_fc.total_reserved_keys_size +
+                   remote_fc.total_reserved_vals_size
+            << '\n';
+        oss << "remote:reserved_kv:keys_size "
+            << remote_fc.total_reserved_keys_size << '\n';
+        oss << "remote:reserved_kv:vals_size "
+            << remote_fc.total_reserved_vals_size << '\n';
+        oss << "remote:deleted_kv:reasons:not_found "
+            << remote_fc.deleted_not_found_keys_num << '\n';
+        oss << "remote:deleted_kv:reasons:expired "
+            << remote_fc.deleted_expired_keys_num << '\n';
+        oss << "remote:deleted_kv:reasons:versions_old "
+            << remote_fc.deleted_versions_old_keys_num << '\n';
+        oss << "remote:deleted_kv:overview:total_num "
+            << remote_fc.deleted_not_found_keys_num +
+                   remote_fc.deleted_expired_keys_num +
+                   remote_fc.deleted_versions_old_keys_num
+        << '\n';
+        oss << "remote:deleted_kv:overview:total_keys_size "
+            << remote_fc.total_deleted_keys_size << '\n';
+        oss << "remote:deleted_kv:overview:total_vals_size "
+            << remote_fc.total_deleted_vals_size << '\n';
+        oss << "remote:deleted_kv:overview:total_vals_size "
+            << remote_fc.total_deleted_vals_size << '\n';
+
+        return oss.str();
+      }
 
       json js;
 
       js["local"]["exec_filter_times"] = local_fc.exec_filter_times;
       js["local"]["reserved_kv"]["total_num"] = local_fc.total_reserved_kv_num;
-      js["local"]["reserved_kv"]["total_size"] = SizeToString(local_fc.total_reserved_keys_size +
-                                local_fc.total_reserved_vals_size);
-      js["local"]["reserved_kv"]["keys_size"] = SizeToString(local_fc.total_reserved_keys_size);
-      js["local"]["reserved_kv"]["vals_size"] = SizeToString(local_fc.total_reserved_vals_size);
-      js["local"]["deleted_kv"]["reasons"]["not_found"] = local_fc.deleted_not_found_keys_num;
-      js["local"]["deleted_kv"]["reasons"]["expired"] = local_fc.deleted_expired_keys_num;
-      js["local"]["deleted_kv"]["reasons"]["versions_old"] = local_fc.deleted_versions_old_keys_num; \
-      js["local"]["deleted_kv"]["overview"]["total_num"] = local_fc.deleted_not_found_keys_num +
-                               local_fc.deleted_expired_keys_num +
-                               local_fc.deleted_versions_old_keys_num;
-      js["local"]["deleted_kv"]["overview"]["total_keys_size"] = SizeToString(local_fc.total_deleted_keys_size);
-      js["local"]["deleted_kv"]["overview"]["total_vals_size"] = SizeToString(local_fc.total_deleted_vals_size);
-      js["local"]["deleted_kv"]["overview"]["total_vals_size"] = SizeToString(local_fc.total_deleted_vals_size);
+      js["local"]["deleted_kv"]["reasons"]["not_found"] =
+          local_fc.deleted_not_found_keys_num;
+      js["local"]["deleted_kv"]["reasons"]["expired"] =
+          local_fc.deleted_expired_keys_num;
+      js["local"]["deleted_kv"]["reasons"]["versions_old"] =
+          local_fc.deleted_versions_old_keys_num;
+      js["local"]["deleted_kv"]["overview"]["total_num"] =
+          local_fc.deleted_not_found_keys_num +
+          local_fc.deleted_expired_keys_num +
+          local_fc.deleted_versions_old_keys_num;
 
       js["remote"]["exec_filter_times"] = remote_fc.exec_filter_times;
-      js["remote"]["reserved_kv"]["total_num"] = remote_fc.total_reserved_kv_num;
-      js["remote"]["reserved_kv"]["total_size"] = SizeToString(remote_fc.total_reserved_keys_size +
-                                remote_fc.total_reserved_vals_size);
-      js["remote"]["reserved_kv"]["keys_size"] = SizeToString(remote_fc.total_reserved_keys_size);
-      js["remote"]["reserved_kv"]["vals_size"] = SizeToString(remote_fc.total_reserved_vals_size);
-      js["remote"]["deleted_kv"]["reasons"]["not_found"] = remote_fc.deleted_not_found_keys_num;
-      js["remote"]["deleted_kv"]["reasons"]["expired"] = remote_fc.deleted_expired_keys_num;
-      js["remote"]["deleted_kv"]["reasons"]["versions_old"] = remote_fc.deleted_versions_old_keys_num; \
-      js["remote"]["deleted_kv"]["overview"]["total_num"] = remote_fc.deleted_not_found_keys_num +
-                               remote_fc.deleted_expired_keys_num +
-                               remote_fc.deleted_versions_old_keys_num;
-      js["remote"]["deleted_kv"]["overview"]["total_keys_size"] = SizeToString(remote_fc.total_deleted_keys_size);
-      js["remote"]["deleted_kv"]["overview"]["total_vals_size"] = SizeToString(remote_fc.total_deleted_vals_size);
-      js["remote"]["deleted_kv"]["overview"]["total_vals_size"] = SizeToString(remote_fc.total_deleted_vals_size);
+      js["remote"]["reserved_kv"]["total_num"] =
+          remote_fc.total_reserved_kv_num;
+      js["remote"]["deleted_kv"]["reasons"]["not_found"] =
+          remote_fc.deleted_not_found_keys_num;
+      js["remote"]["deleted_kv"]["reasons"]["expired"] =
+          remote_fc.deleted_expired_keys_num;
+      js["remote"]["deleted_kv"]["reasons"]["versions_old"] =
+          remote_fc.deleted_versions_old_keys_num;
+      js["remote"]["deleted_kv"]["overview"]["total_num"] =
+          remote_fc.deleted_not_found_keys_num +
+          remote_fc.deleted_expired_keys_num +
+          remote_fc.deleted_versions_old_keys_num;
+
+      if (JsonSmartBool(dump_options, "html", true)) {
+        js["local"]["reserved_kv"]["total_size"] =
+            SizeToString(local_fc.total_reserved_keys_size +
+                         local_fc.total_reserved_vals_size);
+        js["local"]["reserved_kv"]["keys_size"] =
+            SizeToString(local_fc.total_reserved_keys_size);
+        js["local"]["reserved_kv"]["vals_size"] =
+            SizeToString(local_fc.total_reserved_vals_size);
+        js["local"]["deleted_kv"]["overview"]["total_keys_size"] =
+            SizeToString(local_fc.total_deleted_keys_size);
+        js["local"]["deleted_kv"]["overview"]["total_vals_size"] =
+            SizeToString(local_fc.total_deleted_vals_size);
+        js["local"]["deleted_kv"]["overview"]["total_vals_size"] =
+            SizeToString(local_fc.total_deleted_vals_size);
+
+        js["remote"]["reserved_kv"]["total_size"] =
+            SizeToString(remote_fc.total_reserved_keys_size +
+                         remote_fc.total_reserved_vals_size);
+        js["remote"]["reserved_kv"]["keys_size"] =
+            SizeToString(remote_fc.total_reserved_keys_size);
+        js["remote"]["reserved_kv"]["vals_size"] =
+            SizeToString(remote_fc.total_reserved_vals_size);
+        js["remote"]["deleted_kv"]["overview"]["total_keys_size"] =
+            SizeToString(remote_fc.total_deleted_keys_size);
+        js["remote"]["deleted_kv"]["overview"]["total_vals_size"] =
+            SizeToString(remote_fc.total_deleted_vals_size);
+        js["remote"]["deleted_kv"]["overview"]["total_vals_size"] =
+            SizeToString(remote_fc.total_deleted_vals_size);
+      } else {
+        js["local"]["reserved_kv"]["total_size"] =
+            local_fc.total_reserved_keys_size +
+            local_fc.total_reserved_vals_size;
+        js["local"]["reserved_kv"]["keys_size"] =
+            local_fc.total_reserved_keys_size;
+        js["local"]["reserved_kv"]["vals_size"] =
+            local_fc.total_reserved_vals_size;
+        js["local"]["deleted_kv"]["overview"]["total_keys_size"] =
+            local_fc.total_deleted_keys_size;
+        js["local"]["deleted_kv"]["overview"]["total_vals_size"] =
+            local_fc.total_deleted_vals_size;
+        js["local"]["deleted_kv"]["overview"]["total_vals_size"] =
+            local_fc.total_deleted_vals_size;
+
+        js["remote"]["reserved_kv"]["total_size"] =
+            remote_fc.total_reserved_keys_size +
+            remote_fc.total_reserved_vals_size;
+        js["remote"]["reserved_kv"]["keys_size"] =
+            remote_fc.total_reserved_keys_size;
+        js["remote"]["reserved_kv"]["vals_size"] =
+            remote_fc.total_reserved_vals_size;
+        js["remote"]["deleted_kv"]["overview"]["total_keys_size"] =
+            remote_fc.total_deleted_keys_size;
+        js["remote"]["deleted_kv"]["overview"]["total_vals_size"] =
+            remote_fc.total_deleted_vals_size;
+        js["remote"]["deleted_kv"]["overview"]["total_vals_size"] =
+            remote_fc.total_deleted_vals_size;
+      }
+
       return JsonToString(js, dump_options);
     }
     THROW_InvalidArgument("Unknow CompactionFilterFactory");
