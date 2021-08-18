@@ -19,30 +19,17 @@
 
 namespace blackwidow {
 
-class ListsMetaFilterFactory : public rocksdb::CompactionFilterFactory {
- public:
-  ListsMetaFilterFactory() = default;
-  std::unique_ptr<rocksdb::CompactionFilter> CreateCompactionFilter(
-    const rocksdb::CompactionFilter::Context& context) override;
-  const char* Name() const override {
-    return "ListsMetaFilterFactory";
-  }
-  int64_t unix_time_;
-
-  mutable FilterCounter local_fc;
-  mutable FilterCounter remote_fc;
-  std::mutex mtx[2];
-};
+class ListsMetaFilterFactory;
 
 class ListsMetaFilter : public rocksdb::CompactionFilter {
  public:
-  ListsMetaFilter() : factory(nullptr) {}
-  ~ListsMetaFilter() { Add_and_Destructor_Mutex(factory, local_fc, 0, this->fc); }
+  ListsMetaFilter() = default;
+  ~ListsMetaFilter();
   bool Filter(int level, const rocksdb::Slice& key,
               const rocksdb::Slice& value,
               std::string* new_value, bool* value_changed) const override {
 
-    ++fc.exec_filter_times;
+    fc.exec_filter_times++;
 
     int32_t cur_time = static_cast<int32_t>(unix_time);
     ParsedListsMetaValue parsed_lists_meta_value(value);
@@ -58,14 +45,14 @@ class ListsMetaFilter : public rocksdb::CompactionFilter {
       && parsed_lists_meta_value.timestamp() < cur_time
       && parsed_lists_meta_value.version() < cur_time) {
       Trace("Drop[Stale & version < cur_time]");
-      ++fc.deleted_expired_keys_num;
+      fc.deleted_expired_keys_num++;
       fc.count_deleted_kv(key, value);
       return true;
     }
     if (parsed_lists_meta_value.count() == 0
       && parsed_lists_meta_value.version() < cur_time) {
       Trace("Drop[Empty & version < cur_time]");
-      ++fc.deleted_versions_old_keys_num;
+      fc.deleted_versions_old_keys_num++;
       fc.count_deleted_kv(key, value);
       return true;
     }
@@ -76,33 +63,26 @@ class ListsMetaFilter : public rocksdb::CompactionFilter {
   int64_t unix_time;
 
   mutable FilterCounter fc;
-  ListsMetaFilterFactory* factory;
+  const ListsMetaFilterFactory* factory = nullptr;
 
   const char* Name() const override { return "ListsMetaFilter"; }
 };
 
-class ListsDataFilterFactory : public rocksdb::CompactionFilterFactory {
+class ListsMetaFilterFactory : public rocksdb::CompactionFilterFactory {
  public:
-  ListsDataFilterFactory() : ListsDataFilterFactory(nullptr, nullptr) {}
-  ListsDataFilterFactory(rocksdb::DB** db_ptr,
-                         std::vector<rocksdb::ColumnFamilyHandle*>* handles_ptr)
-    : db_ptr_(db_ptr), cf_handles_ptr_(handles_ptr) {}
-
+  ListsMetaFilterFactory() = default;
   std::unique_ptr<rocksdb::CompactionFilter> CreateCompactionFilter(
-      const rocksdb::CompactionFilter::Context& context) override;
+    const rocksdb::CompactionFilter::Context& context) override;
   const char* Name() const override {
-    return "ListsDataFilterFactory";
+    return "ListsMetaFilterFactory";
   }
-
-  rocksdb::DB** db_ptr_;
-  std::vector<rocksdb::ColumnFamilyHandle*>* cf_handles_ptr_;
   int64_t unix_time_;
-  size_t meta_ttl_num_;
 
   mutable FilterCounter local_fc;
   mutable FilterCounter remote_fc;
-  std::mutex mtx[2];
 };
+
+class ListsDataFilterFactory;
 
 class ListsDataFilter : public rocksdb::CompactionFilter {
  public:
@@ -114,13 +94,13 @@ class ListsDataFilter : public rocksdb::CompactionFilter {
     cur_meta_version_(0),
     cur_meta_timestamp_(0) {}
 
-  ~ListsDataFilter() { Add_and_Destructor_Mutex(factory, local_fc, 0, this->fc); }
+  ~ListsDataFilter();
 
   bool Filter(int level, const rocksdb::Slice& key,
               const rocksdb::Slice& value,
               std::string* new_value, bool* value_changed) const override {
 
-    ++fc.exec_filter_times;
+    fc.exec_filter_times++;
 
     if (nullptr == db_ || nullptr == cf_handles_ptr_) {
       return false;
@@ -160,7 +140,7 @@ class ListsDataFilter : public rocksdb::CompactionFilter {
 
     if (meta_not_found_) {
       Trace("Drop[Meta key not exist]");
-      ++fc.deleted_not_found_keys_num;
+      fc.deleted_not_found_keys_num++;
       fc.count_deleted_kv(key, value);
       return true;
     }
@@ -168,14 +148,14 @@ class ListsDataFilter : public rocksdb::CompactionFilter {
     if (cur_meta_timestamp_ != 0
       && cur_meta_timestamp_ < static_cast<int32_t>(unix_time)) {
       Trace("Drop[Timeout]");
-      ++fc.deleted_expired_keys_num;
+      fc.deleted_expired_keys_num++;
       fc.count_deleted_kv(key, value);
       return true;
     }
 
     if (cur_meta_version_ > parsed_lists_data_key.version()) {
       Trace("Drop[list_data_key_version < cur_meta_version]");
-      ++fc.deleted_versions_old_keys_num;
+      fc.deleted_versions_old_keys_num++;
       fc.count_deleted_kv(key, value);
       return true;
     } else {
@@ -187,7 +167,7 @@ class ListsDataFilter : public rocksdb::CompactionFilter {
   int64_t unix_time;
 
   mutable FilterCounter fc;
-  ListsDataFilterFactory* factory;
+  const ListsDataFilterFactory* factory;
 
   const char* Name() const override { return "ListsDataFilter"; }
 
@@ -201,6 +181,28 @@ class ListsDataFilter : public rocksdb::CompactionFilter {
   mutable bool meta_not_found_;
   mutable int32_t cur_meta_version_;
   mutable int32_t cur_meta_timestamp_;
+};
+
+class ListsDataFilterFactory : public rocksdb::CompactionFilterFactory {
+ public:
+  ListsDataFilterFactory() : ListsDataFilterFactory(nullptr, nullptr) {}
+  ListsDataFilterFactory(rocksdb::DB** db_ptr,
+                         std::vector<rocksdb::ColumnFamilyHandle*>* handles_ptr)
+    : db_ptr_(db_ptr), cf_handles_ptr_(handles_ptr) {}
+
+  std::unique_ptr<rocksdb::CompactionFilter> CreateCompactionFilter(
+      const rocksdb::CompactionFilter::Context& context) override;
+  const char* Name() const override {
+    return "ListsDataFilterFactory";
+  }
+
+  rocksdb::DB** db_ptr_;
+  std::vector<rocksdb::ColumnFamilyHandle*>* cf_handles_ptr_;
+  int64_t unix_time_;
+  size_t meta_ttl_num_;
+
+  mutable FilterCounter local_fc;
+  mutable FilterCounter remote_fc;
 };
 
 

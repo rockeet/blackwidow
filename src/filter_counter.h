@@ -1,28 +1,26 @@
 #pragma once
 
+#include <mutex>
 #include <cstddef>
-#include "rocksdb/compaction_filter.h"
+#include "rocksdb/slice.h"
 
 namespace blackwidow {
 
-#define Add_and_Destructor_Mutex(factory, Summand_fc, n, Addend_fc) \
-factory->mtx[n].lock(); \
-factory->Summand_fc.add(Addend_fc); \
-factory->mtx[n].unlock();
-
 class FilterCounter {
 public:
-  FilterCounter();
+  FilterCounter() = default;
   void add(const FilterCounter &f);
   void count_reserved_kv(const rocksdb::Slice& key, const rocksdb::Slice& value);
   void count_deleted_kv(const rocksdb::Slice& key, const rocksdb::Slice& value);
-  size_t exec_filter_times;
-  size_t total_reserved_kv_num;
-  size_t total_reserved_keys_size, total_reserved_vals_size;
-  size_t deleted_not_found_keys_num;
-  size_t deleted_expired_keys_num;
-  size_t deleted_versions_old_keys_num;
-  size_t total_deleted_keys_size, total_deleted_vals_size;
+  size_t exec_filter_times = 0;
+  size_t total_reserved_kv_num = 0;
+  size_t total_reserved_keys_size, total_reserved_vals_size = 0;
+  size_t deleted_not_found_keys_num = 0;
+  size_t deleted_expired_keys_num = 0;
+  size_t deleted_versions_old_keys_num = 0;
+  size_t total_deleted_keys_size, total_deleted_vals_size = 0;
+private:
+  std::mutex mtx;
 };
 
 } // namespace blackwidow

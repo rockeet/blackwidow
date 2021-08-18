@@ -17,30 +17,17 @@
 
 namespace blackwidow {
 
-class StringsFilterFactory : public rocksdb::CompactionFilterFactory {
- public:
-  StringsFilterFactory() = default;
-  std::unique_ptr<rocksdb::CompactionFilter> CreateCompactionFilter(
-    const rocksdb::CompactionFilter::Context& context) override;
-  const char* Name() const override {
-    return "StringsFilterFactory";
-  }
-  uint64_t unix_time_ = 0; // only used by compact worker
-
-  mutable FilterCounter local_fc;
-  mutable FilterCounter remote_fc;
-  std::mutex mtx[2];
-};
+class StringsFilterFactory;
 
 class StringsFilter : public rocksdb::CompactionFilter {
  public:
-  StringsFilter() : factory(nullptr) {}
-  ~StringsFilter() { Add_and_Destructor_Mutex(factory, local_fc, 0, this->fc); }
+  StringsFilter() = default;
+  ~StringsFilter();
   bool Filter(int level, const rocksdb::Slice& key,
               const rocksdb::Slice& value,
               std::string* new_value, bool* value_changed) const override {
 
-    ++fc.exec_filter_times;
+    fc.exec_filter_times++;
 
     int32_t cur_time = static_cast<int32_t>(unix_time);
     ParsedStringsValue parsed_strings_value(value);
@@ -54,7 +41,7 @@ class StringsFilter : public rocksdb::CompactionFilter {
     if (parsed_strings_value.timestamp() != 0
       && parsed_strings_value.timestamp() < cur_time) {
       Trace("Drop[Stale]");
-      ++fc.deleted_expired_keys_num;
+      fc.deleted_expired_keys_num++;
       fc.count_deleted_kv(key, value);
       return true;
     } else {
@@ -66,9 +53,23 @@ class StringsFilter : public rocksdb::CompactionFilter {
   int64_t unix_time;
 
   mutable FilterCounter fc;
-  StringsFilterFactory* factory;
+  const StringsFilterFactory* factory = nullptr;
 
   const char* Name() const override { return "StringsFilter"; }
+};
+
+class StringsFilterFactory : public rocksdb::CompactionFilterFactory {
+ public:
+  StringsFilterFactory() = default;
+  std::unique_ptr<rocksdb::CompactionFilter> CreateCompactionFilter(
+    const rocksdb::CompactionFilter::Context& context) override;
+  const char* Name() const override {
+    return "StringsFilterFactory";
+  }
+  uint64_t unix_time_ = 0; // only used by compact worker
+
+  mutable FilterCounter local_fc;
+  mutable FilterCounter remote_fc;
 };
 
 }  //  namespace blackwidow

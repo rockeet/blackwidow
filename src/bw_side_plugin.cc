@@ -62,8 +62,13 @@ ROCKSDB_REG_DEFAULT_CONS(  StringsFilterFactory, CompactionFilterFactory);
 
 BaseDataFilter::~BaseDataFilter() {
   delete iter_;
-  Add_and_Destructor_Mutex(factory, local_fc, 0, this->fc);
+  factory->local_fc.add(this->fc);
 }
+BaseMetaFilter::~BaseMetaFilter() { factory->local_fc.add(this->fc); }
+ListsMetaFilter::~ListsMetaFilter() { factory->local_fc.add(this->fc); }
+ListsDataFilter::~ListsDataFilter() { factory->local_fc.add(this->fc); }
+StringsFilter::~StringsFilter() { factory->local_fc.add(this->fc); }
+ZSetsScoreFilter::~ZSetsScoreFilter() { factory->local_fc.add(this->fc); }
 
 template<class Base>
 struct FilterFac : public Base {
@@ -130,7 +135,7 @@ ROCKSDB_FACTORY_REG("blackwidow.ZSetsScoreKeyComparator",
                              JS_ZSetsScoreKeyComparator);
 
 template<class ConcreteFilter, class Factory>
-static std::unique_ptr<CompactionFilter> Tpl_SimpleNewFilter(Factory* fac) {
+static std::unique_ptr<CompactionFilter> Tpl_SimpleNewFilter(const Factory* fac) {
   auto filter = new ConcreteFilter;
   if (IsCompactionWorker()) {
     filter->unix_time = fac->unix_time_;
@@ -182,7 +187,7 @@ struct SimpleFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
     else {
       FilterCounter temp_fc;
       dio >> temp_fc;
-      Add_and_Destructor_Mutex(fac, remote_fc, 1, temp_fc);
+      fac->remote_fc.add(temp_fc);
     }
   }
 };
@@ -613,7 +618,7 @@ struct DataFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
     else {
       FilterCounter temp_fc;
       dio >> temp_fc;
-      Add_and_Destructor_Mutex(fac, remote_fc, 1, temp_fc);
+      fac->remote_fc.add(temp_fc);
     }
   }
 };
