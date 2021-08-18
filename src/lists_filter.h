@@ -66,23 +66,15 @@ class ListsMetaFilter : public rocksdb::CompactionFilter {
   const char* Name() const override { return "ListsMetaFilter"; }
 };
 
-class ListsDataFilterFactory : public rocksdb::CompactionFilterFactory {
+class ListsMetaFilterFactory : public rocksdb::CompactionFilterFactory {
  public:
-  ListsDataFilterFactory() : ListsDataFilterFactory(nullptr, nullptr) {}
-  ListsDataFilterFactory(rocksdb::DB** db_ptr,
-                         std::vector<rocksdb::ColumnFamilyHandle*>* handles_ptr)
-    : db_ptr_(db_ptr), cf_handles_ptr_(handles_ptr) {}
-
+  ListsMetaFilterFactory() = default;
   std::unique_ptr<rocksdb::CompactionFilter> CreateCompactionFilter(
-      const rocksdb::CompactionFilter::Context& context) override;
+    const rocksdb::CompactionFilter::Context& context) override;
   const char* Name() const override {
-    return "ListsDataFilterFactory";
+    return "ListsMetaFilterFactory";
   }
-
-  rocksdb::DB** db_ptr_;
-  std::vector<rocksdb::ColumnFamilyHandle*>* cf_handles_ptr_;
   int64_t unix_time_;
-  size_t meta_ttl_num_;
 
   mutable FilterCounter local_fl_cnt;
   mutable FilterCounter remote_fl_cnt;

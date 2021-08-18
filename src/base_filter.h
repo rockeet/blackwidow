@@ -22,26 +22,11 @@ namespace rocksdb {
 }
 using rocksdb::ColumnFamilyHandle;
 
-using namespace nlohmann;
-
 namespace blackwidow {
 
 rocksdb::Iterator* NewMetaIter(rocksdb::DB*, ColumnFamilyHandle*, uint64_t);
 
-class BaseMetaFilterFactory : public rocksdb::CompactionFilterFactory {
- public:
-  BaseMetaFilterFactory() = default;
-  std::unique_ptr<rocksdb::CompactionFilter> CreateCompactionFilter(
-        const rocksdb::CompactionFilter::Context& context) override;
-  const char* Name() const override {
-    return "BaseMetaFilterFactory";
-  }
-  uint64_t unix_time_ = 0; // only used by compact worker
-
-  mutable FilterCounter local_fc;
-  mutable FilterCounter remote_fc;
-  std::mutex mtx[2];
-};
+class BaseMetaFilterFactory;
 
 class BaseMetaFilterFactory;
 
@@ -68,14 +53,14 @@ class BaseMetaFilter : public rocksdb::CompactionFilter {
     if (parsed_base_meta_value.timestamp() != 0
       && parsed_base_meta_value.timestamp() < cur_time
       && parsed_base_meta_value.version() < cur_time) {
-      ++fc.deleted_expired_keys_num;
+      fc.deleted_expired_keys_num++;
       Trace("Drop[Stale & version < cur_time]");
       fl_cnt.deleted_expired.count_info(key, value);
       return true;
     }
     if (parsed_base_meta_value.count() == 0
       && parsed_base_meta_value.version() < cur_time) {
-      ++fc.deleted_versions_old_keys_num;
+      fc.deleted_versions_old_keys_num++;
       Trace("Drop[Empty & version < cur_time]");
       fl_cnt.deleted_versions_old.count_info(key, value);
       return true;
@@ -92,24 +77,15 @@ class BaseMetaFilter : public rocksdb::CompactionFilter {
   const char* Name() const override { return "BaseMetaFilter"; }
 };
 
-
-class BaseDataFilterFactory : public rocksdb::CompactionFilterFactory {
+class BaseMetaFilterFactory : public rocksdb::CompactionFilterFactory {
  public:
-  BaseDataFilterFactory() : BaseDataFilterFactory(nullptr, nullptr) {}
-  BaseDataFilterFactory(rocksdb::DB** db_ptr,
-                        std::vector<rocksdb::ColumnFamilyHandle*>* handles_ptr)
-      : db_ptr_(db_ptr), cf_handles_ptr_(handles_ptr) {
-  }
+  BaseMetaFilterFactory() = default;
   std::unique_ptr<rocksdb::CompactionFilter> CreateCompactionFilter(
-    const rocksdb::CompactionFilter::Context&) override;
+        const rocksdb::CompactionFilter::Context& context) override;
   const char* Name() const override {
-    return "BaseDataFilterFactory";
+    return "BaseMetaFilterFactory";
   }
-
-  rocksdb::DB** db_ptr_;
-  std::vector<rocksdb::ColumnFamilyHandle*>* cf_handles_ptr_;
-  uint64_t unix_time_;
-  size_t meta_ttl_num_;
+  uint64_t unix_time_ = 0; // only used by compact worker
 
   mutable FilterCounter local_fl_cnt;
   mutable FilterCounter remote_fl_cnt;

@@ -135,7 +135,7 @@ ROCKSDB_FACTORY_REG("blackwidow.ZSetsScoreKeyComparator",
                              JS_ZSetsScoreKeyComparator);
 
 template<class ConcreteFilter, class Factory>
-static std::unique_ptr<CompactionFilter> Tpl_SimpleNewFilter(Factory* fac) {
+static std::unique_ptr<CompactionFilter> Tpl_SimpleNewFilter(const Factory* fac) {
   auto filter = new ConcreteFilter;
   if (IsCompactionWorker()) {
     filter->unix_time = fac->unix_time_;
