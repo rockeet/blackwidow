@@ -250,7 +250,7 @@ public:
               const rocksdb::Slice& value,
               std::string* new_value, bool* value_changed) const override {
 
-    ++fc.exec_filter_times;
+    fc.exec_filter_times++;
 
     ParsedBaseDataKey parsed_base_data_key(key, &parse_key_buf_);
     Trace("==========================START==========================");
@@ -273,20 +273,20 @@ public:
 
     if (meta_not_found_) {
       Trace("Drop[Meta key not exist]");
-      ++fc.deleted_not_found_keys_num;
+      fc.deleted_not_found_keys_num++;
       return true;
     }
 
     if (cur_meta_timestamp_ != 0
       && cur_meta_timestamp_ < static_cast<int32_t>(unix_time)) {
       Trace("Drop[Timeout]");
-      ++fc.deleted_expired_keys_num;
+      fc.deleted_expired_keys_num++;
       return true;
     }
 
     if (cur_meta_version_ > parsed_base_data_key.version()) {
       Trace("Drop[data_key_version < cur_meta_version]");
-      ++fc.deleted_versions_old_keys_num;
+      fc.deleted_versions_old_keys_num++;
       return true;
     } else {
       Trace("Reserve[data_key_version == cur_meta_version]");
@@ -304,7 +304,7 @@ public:
               const rocksdb::Slice& value,
               std::string* new_value, bool* value_changed) const override {
               
-    ++fc.exec_filter_times;
+    fc.exec_filter_times++;
 
     ParsedListsDataKey parsed_lists_data_key(key, &parse_key_buf_);
     Trace("==========================START==========================");
@@ -328,20 +328,20 @@ public:
 
     if (meta_not_found_) {
       Trace("Drop[Meta key not exist]");
-      ++fc.deleted_not_found_keys_num;
+      fc.deleted_not_found_keys_num++;
       return true;
     }
 
     if (cur_meta_timestamp_ != 0
       && cur_meta_timestamp_ < static_cast<int32_t>(unix_time)) {
       Trace("Drop[Timeout]");
-      ++fc.deleted_expired_keys_num;
+      fc.deleted_expired_keys_num++;
       return true;
     }
 
     if (cur_meta_version_ > parsed_lists_data_key.version()) {
       Trace("Drop[list_data_key_version < cur_meta_version]");
-      ++fc.deleted_versions_old_keys_num;
+      fc.deleted_versions_old_keys_num++;
       return true;
     } else {
       Trace("Reserve[list_data_key_version == cur_meta_version]");
@@ -359,7 +359,7 @@ public:
               const rocksdb::Slice& value,
               std::string* new_value, bool* value_changed) const override {
 
-    ++fc.exec_filter_times;
+    fc.exec_filter_times++;
 
     ParsedZSetsScoreKey parsed_zsets_score_key(key, &parse_key_buf_);
     Trace("==========================START==========================");
@@ -383,19 +383,19 @@ public:
 
     if (meta_not_found_) {
       Trace("Drop[Meta key not exist]");
-      ++fc.deleted_not_found_keys_num;
+      fc.deleted_not_found_keys_num++;
       return true;
     }
 
     if (cur_meta_timestamp_ != 0 &&
         cur_meta_timestamp_ < static_cast<int32_t>(unix_time)) {
       Trace("Drop[Timeout]");
-      ++fc.deleted_expired_keys_num;
+      fc.deleted_expired_keys_num++;
       return true;
     }
     if (cur_meta_version_ > parsed_zsets_score_key.version()) {
       Trace("Drop[score_key_version < cur_meta_version]");
-      ++fc.deleted_versions_old_keys_num;
+      fc.deleted_versions_old_keys_num++;
       return true;
     } else {
       Trace("Reserve[score_key_version == cur_meta_version]");
