@@ -15,6 +15,7 @@ void FilterKeysInfo::add(const FilterKeysInfo& f) {
 
 void FilterCounter::add(const FilterCounter &f) {
   mtx.lock();
+  this->exec_filter_times += f.exec_filter_times;
   this->all_retained.add(f.all_retained);
   this->deleted_not_found.add(f.deleted_not_found);
   this->deleted_expired.add(f.deleted_expired);
