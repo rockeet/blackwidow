@@ -53,14 +53,12 @@ class BaseMetaFilter : public rocksdb::CompactionFilter {
     if (parsed_base_meta_value.timestamp() != 0
       && parsed_base_meta_value.timestamp() < cur_time
       && parsed_base_meta_value.version() < cur_time) {
-      fc.deleted_expired_keys_num++;
       Trace("Drop[Stale & version < cur_time]");
       fl_cnt.deleted_expired.count_info(key, value);
       return true;
     }
     if (parsed_base_meta_value.count() == 0
       && parsed_base_meta_value.version() < cur_time) {
-      fc.deleted_versions_old_keys_num++;
       Trace("Drop[Empty & version < cur_time]");
       fl_cnt.deleted_versions_old.count_info(key, value);
       return true;

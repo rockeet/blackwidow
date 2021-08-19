@@ -2,7 +2,6 @@
 
 namespace blackwidow {
 
-
 void FilterKeysInfo::count_info(const rocksdb::Slice& key, const rocksdb::Slice& val) {
   num++;
   keys_size += key.size();
