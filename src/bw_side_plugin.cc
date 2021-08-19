@@ -62,13 +62,13 @@ ROCKSDB_REG_DEFAULT_CONS(  StringsFilterFactory, CompactionFilterFactory);
 
 BaseDataFilter::~BaseDataFilter() {
   delete iter_;
-  factory->local_fc.add(this->fc);
+  factory->local_fl_cnt.add(this->fl_cnt);
 }
-BaseMetaFilter::~BaseMetaFilter() { factory->local_fc.add(this->fc); }
-ListsMetaFilter::~ListsMetaFilter() { factory->local_fc.add(this->fc); }
-ListsDataFilter::~ListsDataFilter() { factory->local_fc.add(this->fc); }
-StringsFilter::~StringsFilter() { factory->local_fc.add(this->fc); }
-ZSetsScoreFilter::~ZSetsScoreFilter() { factory->local_fc.add(this->fc); }
+BaseMetaFilter::~BaseMetaFilter() { factory->local_fl_cnt.add(this->fl_cnt); }
+ListsMetaFilter::~ListsMetaFilter() { factory->local_fl_cnt.add(this->fl_cnt); }
+ListsDataFilter::~ListsDataFilter() { factory->local_fl_cnt.add(this->fl_cnt); }
+StringsFilter::~StringsFilter() { factory->local_fl_cnt.add(this->fl_cnt); }
+ZSetsScoreFilter::~ZSetsScoreFilter() { factory->local_fl_cnt.add(this->fl_cnt); }
 
 template<class Base>
 struct FilterFac : public Base {
@@ -169,7 +169,7 @@ struct SimpleFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
     auto& fac = dynamic_cast<const ConcreteFactory&>(base);
     LittleEndianDataOutput<NonOwnerFileStream> dio(output);
     if (IsCompactionWorker()) {
-      dio << fac.local_fc;
+      dio << fac.local_fl_cnt;
     }
     else {
       int64_t unix_time;
@@ -185,9 +185,9 @@ struct SimpleFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
       dio >> fac->unix_time_;
     }
     else {
-      FilterCounter temp_fc;
-      dio >> temp_fc;
-      fac->remote_fc.add(temp_fc);
+      FilterCounter temp_fl_cnt;
+      dio >> temp_fl_cnt;
+      fac->remote_fl_cnt.add(temp_fl_cnt);
     }
   }
 };
@@ -250,7 +250,7 @@ public:
               const rocksdb::Slice& value,
               std::string* new_value, bool* value_changed) const override {
 
-    fc.exec_filter_times++;
+    fl_cnt.exec_filter_times++;
 
     ParsedBaseDataKey parsed_base_data_key(key, &parse_key_buf_);
     Trace("==========================START==========================");
@@ -273,24 +273,24 @@ public:
 
     if (meta_not_found_) {
       Trace("Drop[Meta key not exist]");
-      fc.deleted_not_found.count_info(key, value);
+      fl_cnt.deleted_not_found.count_info(key, value);
       return true;
     }
 
     if (cur_meta_timestamp_ != 0
       && cur_meta_timestamp_ < static_cast<int32_t>(unix_time)) {
       Trace("Drop[Timeout]");
-      fc.deleted_expired.count_info(key, value);
+      fl_cnt.deleted_expired.count_info(key, value);
       return true;
     }
 
     if (cur_meta_version_ > parsed_base_data_key.version()) {
       Trace("Drop[data_key_version < cur_meta_version]");
-      fc.deleted_versions_old.count_info(key, value);
+      fl_cnt.deleted_versions_old.count_info(key, value);
       return true;
     } else {
       Trace("Reserve[data_key_version == cur_meta_version]");
-      fc.all_retained.count_info(key, value);
+      fl_cnt.all_retained.count_info(key, value);
       return false;
     }
   }
@@ -305,7 +305,7 @@ public:
               const rocksdb::Slice& value,
               std::string* new_value, bool* value_changed) const override {
               
-    fc.exec_filter_times++;
+    fl_cnt.exec_filter_times++;
 
     ParsedListsDataKey parsed_lists_data_key(key, &parse_key_buf_);
     Trace("==========================START==========================");
@@ -329,24 +329,24 @@ public:
 
     if (meta_not_found_) {
       Trace("Drop[Meta key not exist]");
-      fc.deleted_not_found.count_info(key, value);
+      fl_cnt.deleted_not_found.count_info(key, value);
       return true;
     }
 
     if (cur_meta_timestamp_ != 0
       && cur_meta_timestamp_ < static_cast<int32_t>(unix_time)) {
       Trace("Drop[Timeout]");
-      fc.deleted_expired.count_info(key, value);
+      fl_cnt.deleted_expired.count_info(key, value);
       return true;
     }
 
     if (cur_meta_version_ > parsed_lists_data_key.version()) {
       Trace("Drop[list_data_key_version < cur_meta_version]");
-      fc.deleted_versions_old.count_info(key, value);
+      fl_cnt.deleted_versions_old.count_info(key, value);
       return true;
     } else {
       Trace("Reserve[list_data_key_version == cur_meta_version]");
-      fc.all_retained.count_info(key, value);
+      fl_cnt.all_retained.count_info(key, value);
       return false;
     }
   }
@@ -361,7 +361,7 @@ public:
               const rocksdb::Slice& value,
               std::string* new_value, bool* value_changed) const override {
 
-    fc.exec_filter_times++;
+    fl_cnt.exec_filter_times++;
 
     ParsedZSetsScoreKey parsed_zsets_score_key(key, &parse_key_buf_);
     Trace("==========================START==========================");
@@ -385,23 +385,23 @@ public:
 
     if (meta_not_found_) {
       Trace("Drop[Meta key not exist]");
-      fc.deleted_not_found.count_info(key, value);
+      fl_cnt.deleted_not_found.count_info(key, value);
       return true;
     }
 
     if (cur_meta_timestamp_ != 0 &&
         cur_meta_timestamp_ < static_cast<int32_t>(unix_time)) {
       Trace("Drop[Timeout]");
-      fc.deleted_expired.count_info(key, value);
+      fl_cnt.deleted_expired.count_info(key, value);
       return true;
     }
     if (cur_meta_version_ > parsed_zsets_score_key.version()) {
       Trace("Drop[score_key_version < cur_meta_version]");
-      fc.deleted_versions_old.count_info(key, value);
+      fl_cnt.deleted_versions_old.count_info(key, value);
       return true;
     } else {
       Trace("Reserve[score_key_version == cur_meta_version]");
-      fc.all_retained.count_info(key, value);
+      fl_cnt.all_retained.count_info(key, value);
       return false;
     }
   }
@@ -584,7 +584,7 @@ struct DataFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
     auto& fac = dynamic_cast<const ConcreteFactory&>(base);
     LittleEndianDataOutput<NonOwnerFileStream> dio(output);
     if (IsCompactionWorker()) {
-      dio << fac.local_fc;
+      dio << fac.local_fl_cnt;
     }
     else {
       size_t kvs; // meta_ttl_num_
@@ -619,9 +619,9 @@ struct DataFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
             job_id, fac->m_type.c_str(), fac->Name(), kvs, rawzip[0]/1e9, rawzip[1]/1e9, (llong)m_cp->smallest_seqno);
     }
     else {
-      FilterCounter temp_fc;
-      dio >> temp_fc;
-      fac->remote_fc.add(temp_fc);
+      FilterCounter temp_fl_cnt;
+      dio >> temp_fl_cnt;
+      fac->remote_fl_cnt.add(temp_fl_cnt);
     }
   }
 };
@@ -734,307 +734,307 @@ struct FilterFactory_Manip : PluginManipFunc<CompactionFilterFactory> {
                        const json &dump_options,
                        const SidePluginRepo &) const final {
     if (auto f = dynamic_cast<const FilterFactory *>(&fac)) {
-      FilterCounter &local_fc = f->local_fc;
-      FilterCounter &remote_fc = f->remote_fc;
+      FilterCounter &local_fl_cnt = f->local_fl_cnt;
+      FilterCounter &remote_fl_cnt = f->remote_fl_cnt;
 
       bool metric = JsonSmartBool(dump_options, "metric", false);
       if (metric) {
         std::ostringstream oss;
-        oss << "local:exec_filter_times " << local_fc.exec_filter_times << '\n';
-        oss << "local:retained:total_num " << local_fc.all_retained.num << '\n';
-        oss << "local:retained:keys_size " << local_fc.all_retained.keys_size
+        oss << "local:exec_filter_times " << local_fl_cnt.exec_filter_times << '\n';
+        oss << "local:retained:total_num " << local_fl_cnt.all_retained.num << '\n';
+        oss << "local:retained:keys_size " << local_fl_cnt.all_retained.keys_size
             << '\n';
-        oss << "local:retained:vals_size " << local_fc.all_retained.vals_size
+        oss << "local:retained:vals_size " << local_fl_cnt.all_retained.vals_size
             << '\n';
         oss << "local:retained:total_size "
-            << local_fc.all_retained.keys_size + local_fc.all_retained.vals_size
+            << local_fl_cnt.all_retained.keys_size + local_fl_cnt.all_retained.vals_size
             << '\n';
-        oss << "local:deleted:not_found:num " << local_fc.deleted_not_found.num
+        oss << "local:deleted:not_found:num " << local_fl_cnt.deleted_not_found.num
             << '\n';
         oss << "local:deleted:not_found:keys_size "
-            << local_fc.deleted_not_found.keys_size << '\n';
+            << local_fl_cnt.deleted_not_found.keys_size << '\n';
         oss << "local:deleted:not_found:vals_size "
-            << local_fc.deleted_not_found.vals_size << '\n';
+            << local_fl_cnt.deleted_not_found.vals_size << '\n';
         oss << "local:deleted:not_found:total_size "
-            << local_fc.deleted_not_found.keys_size +
-                   local_fc.deleted_not_found.vals_size
+            << local_fl_cnt.deleted_not_found.keys_size +
+                   local_fl_cnt.deleted_not_found.vals_size
             << '\n';
-        oss << "local:deleted:expired:num " << local_fc.deleted_expired.num
+        oss << "local:deleted:expired:num " << local_fl_cnt.deleted_expired.num
             << '\n';
         oss << "local:deleted:expired:keys_size "
-            << local_fc.deleted_expired.keys_size << '\n';
+            << local_fl_cnt.deleted_expired.keys_size << '\n';
         oss << "local:deleted:expired:vals_size "
-            << local_fc.deleted_expired.vals_size << '\n';
+            << local_fl_cnt.deleted_expired.vals_size << '\n';
         oss << "local:deleted:expired:total_size "
-            << local_fc.deleted_expired.keys_size +
-                   local_fc.deleted_expired.vals_size
+            << local_fl_cnt.deleted_expired.keys_size +
+                   local_fl_cnt.deleted_expired.vals_size
             << '\n';
         oss << "local:deleted:versions_old:num "
-            << local_fc.deleted_versions_old.num << '\n';
+            << local_fl_cnt.deleted_versions_old.num << '\n';
         oss << "local:deleted:versions_old:keys_size "
-            << local_fc.deleted_versions_old.keys_size << '\n';
+            << local_fl_cnt.deleted_versions_old.keys_size << '\n';
         oss << "local:deleted:versions_old:vals_size "
-            << local_fc.deleted_versions_old.vals_size << '\n';
+            << local_fl_cnt.deleted_versions_old.vals_size << '\n';
         oss << "local:deleted:versions_old:total_size "
-            << local_fc.deleted_versions_old.keys_size +
-                   local_fc.deleted_versions_old.vals_size
+            << local_fl_cnt.deleted_versions_old.keys_size +
+                   local_fl_cnt.deleted_versions_old.vals_size
             << '\n';
         oss << "local:deleted:total_num "
-            << local_fc.deleted_not_found.num + local_fc.deleted_expired.num +
-                   local_fc.deleted_versions_old.num
+            << local_fl_cnt.deleted_not_found.num + local_fl_cnt.deleted_expired.num +
+                   local_fl_cnt.deleted_versions_old.num
             << '\n';
         oss << "local:deleted:total_keys_size "
-            << local_fc.deleted_not_found.keys_size +
-                   local_fc.deleted_expired.keys_size +
-                   local_fc.deleted_versions_old.keys_size
+            << local_fl_cnt.deleted_not_found.keys_size +
+                   local_fl_cnt.deleted_expired.keys_size +
+                   local_fl_cnt.deleted_versions_old.keys_size
             << '\n';
         oss << "local:deleted:total_vals_size "
-            << local_fc.deleted_not_found.vals_size +
-                   local_fc.deleted_expired.vals_size +
-                   local_fc.deleted_versions_old.vals_size
+            << local_fl_cnt.deleted_not_found.vals_size +
+                   local_fl_cnt.deleted_expired.vals_size +
+                   local_fl_cnt.deleted_versions_old.vals_size
             << '\n';
         oss << "local:deleted:total_size "
-            << local_fc.deleted_not_found.keys_size +
-                   local_fc.deleted_not_found.vals_size +
-                   local_fc.deleted_expired.keys_size +
-                   local_fc.deleted_expired.vals_size +
-                   local_fc.deleted_versions_old.keys_size +
-                   local_fc.deleted_versions_old.vals_size
+            << local_fl_cnt.deleted_not_found.keys_size +
+                   local_fl_cnt.deleted_not_found.vals_size +
+                   local_fl_cnt.deleted_expired.keys_size +
+                   local_fl_cnt.deleted_expired.vals_size +
+                   local_fl_cnt.deleted_versions_old.keys_size +
+                   local_fl_cnt.deleted_versions_old.vals_size
             << '\n';
 
-        oss << "remote:exec_filter_times " << remote_fc.exec_filter_times
+        oss << "remote:exec_filter_times " << remote_fl_cnt.exec_filter_times
             << '\n';
-        oss << "remote:retained:total_num " << remote_fc.all_retained.num
+        oss << "remote:retained:total_num " << remote_fl_cnt.all_retained.num
             << '\n';
-        oss << "remote:retained:keys_size " << remote_fc.all_retained.keys_size
+        oss << "remote:retained:keys_size " << remote_fl_cnt.all_retained.keys_size
             << '\n';
-        oss << "remote:retained:vals_size " << remote_fc.all_retained.vals_size
+        oss << "remote:retained:vals_size " << remote_fl_cnt.all_retained.vals_size
             << '\n';
         oss << "remote:retained:total_size "
-            << remote_fc.all_retained.keys_size +
-                   remote_fc.all_retained.vals_size
+            << remote_fl_cnt.all_retained.keys_size +
+                   remote_fl_cnt.all_retained.vals_size
             << '\n';
         oss << "remote:deleted:not_found:num "
-            << remote_fc.deleted_not_found.num << '\n';
+            << remote_fl_cnt.deleted_not_found.num << '\n';
         oss << "remote:deleted:not_found:keys_size "
-            << remote_fc.deleted_not_found.keys_size << '\n';
+            << remote_fl_cnt.deleted_not_found.keys_size << '\n';
         oss << "remote:deleted:not_found:vals_size "
-            << remote_fc.deleted_not_found.vals_size << '\n';
+            << remote_fl_cnt.deleted_not_found.vals_size << '\n';
         oss << "remote:deleted:not_found:total_size "
-            << remote_fc.deleted_not_found.keys_size +
-                   remote_fc.deleted_not_found.vals_size
+            << remote_fl_cnt.deleted_not_found.keys_size +
+                   remote_fl_cnt.deleted_not_found.vals_size
             << '\n';
-        oss << "remote:deleted:expired:num " << remote_fc.deleted_expired.num
+        oss << "remote:deleted:expired:num " << remote_fl_cnt.deleted_expired.num
             << '\n';
         oss << "remote:deleted:expired:keys_size "
-            << remote_fc.deleted_expired.keys_size << '\n';
+            << remote_fl_cnt.deleted_expired.keys_size << '\n';
         oss << "remote:deleted:expired:vals_size "
-            << remote_fc.deleted_expired.vals_size << '\n';
+            << remote_fl_cnt.deleted_expired.vals_size << '\n';
         oss << "remote:deleted:expired:total_size "
-            << remote_fc.deleted_expired.keys_size +
-                   remote_fc.deleted_expired.vals_size
+            << remote_fl_cnt.deleted_expired.keys_size +
+                   remote_fl_cnt.deleted_expired.vals_size
             << '\n';
         oss << "remote:deleted:versions_old:num "
-            << remote_fc.deleted_versions_old.num << '\n';
+            << remote_fl_cnt.deleted_versions_old.num << '\n';
         oss << "remote:deleted:versions_old:keys_size "
-            << remote_fc.deleted_versions_old.keys_size << '\n';
+            << remote_fl_cnt.deleted_versions_old.keys_size << '\n';
         oss << "remote:deleted:versions_old:vals_size "
-            << remote_fc.deleted_versions_old.vals_size << '\n';
+            << remote_fl_cnt.deleted_versions_old.vals_size << '\n';
         oss << "remote:deleted:versions_old:total_size "
-            << remote_fc.deleted_versions_old.keys_size +
-                   remote_fc.deleted_versions_old.vals_size
+            << remote_fl_cnt.deleted_versions_old.keys_size +
+                   remote_fl_cnt.deleted_versions_old.vals_size
             << '\n';
         oss << "remote:deleted:total_num "
-            << remote_fc.deleted_not_found.num + remote_fc.deleted_expired.num +
-                   remote_fc.deleted_versions_old.num
+            << remote_fl_cnt.deleted_not_found.num + remote_fl_cnt.deleted_expired.num +
+                   remote_fl_cnt.deleted_versions_old.num
             << '\n';
         oss << "remote:deleted:total_keys_size "
-            << remote_fc.deleted_not_found.keys_size +
-                   remote_fc.deleted_expired.keys_size +
-                   remote_fc.deleted_versions_old.keys_size
+            << remote_fl_cnt.deleted_not_found.keys_size +
+                   remote_fl_cnt.deleted_expired.keys_size +
+                   remote_fl_cnt.deleted_versions_old.keys_size
             << '\n';
         oss << "remote:deleted:total_vals_size "
-            << remote_fc.deleted_not_found.vals_size +
-                   remote_fc.deleted_expired.vals_size +
-                   remote_fc.deleted_versions_old.vals_size
+            << remote_fl_cnt.deleted_not_found.vals_size +
+                   remote_fl_cnt.deleted_expired.vals_size +
+                   remote_fl_cnt.deleted_versions_old.vals_size
             << '\n';
         oss << "remote:deleted:total_size "
-            << remote_fc.deleted_not_found.keys_size +
-                   remote_fc.deleted_not_found.vals_size +
-                   remote_fc.deleted_expired.keys_size +
-                   remote_fc.deleted_expired.vals_size +
-                   remote_fc.deleted_versions_old.keys_size +
-                   remote_fc.deleted_versions_old.vals_size
+            << remote_fl_cnt.deleted_not_found.keys_size +
+                   remote_fl_cnt.deleted_not_found.vals_size +
+                   remote_fl_cnt.deleted_expired.keys_size +
+                   remote_fl_cnt.deleted_expired.vals_size +
+                   remote_fl_cnt.deleted_versions_old.keys_size +
+                   remote_fl_cnt.deleted_versions_old.vals_size
             << '\n';
         return oss.str();
       }
 
       json js;
 
-      js["local"]["exec_filter_times"] = local_fc.exec_filter_times;
-      js["local"]["retained"]["total_num"] = local_fc.all_retained.num;
-      js["local"]["deleted"]["not_found"]["num"] = local_fc.deleted_not_found.num;
-      js["local"]["deleted"]["expired"]["num"] = local_fc.deleted_expired.num;
+      js["local"]["exec_filter_times"] = local_fl_cnt.exec_filter_times;
+      js["local"]["retained"]["total_num"] = local_fl_cnt.all_retained.num;
+      js["local"]["deleted"]["not_found"]["num"] = local_fl_cnt.deleted_not_found.num;
+      js["local"]["deleted"]["expired"]["num"] = local_fl_cnt.deleted_expired.num;
       js["local"]["deleted"]["versions_old"]["num"] =
-          local_fc.deleted_versions_old.num;
-      js["local"]["deleted"]["total_num"] = local_fc.deleted_not_found.num +
-                                            local_fc.deleted_expired.num +
-                                            local_fc.deleted_versions_old.num;
+          local_fl_cnt.deleted_versions_old.num;
+      js["local"]["deleted"]["total_num"] = local_fl_cnt.deleted_not_found.num +
+                                            local_fl_cnt.deleted_expired.num +
+                                            local_fl_cnt.deleted_versions_old.num;
 
-      js["remote"]["exec_filter_times"] = remote_fc.exec_filter_times;
-      js["remote"]["retained"]["total_num"] = remote_fc.all_retained.num;
-      js["remote"]["deleted"]["not_found"]["num"] = remote_fc.deleted_not_found.num;
-      js["remote"]["deleted"]["expired"]["num"] = remote_fc.deleted_expired.num;
+      js["remote"]["exec_filter_times"] = remote_fl_cnt.exec_filter_times;
+      js["remote"]["retained"]["total_num"] = remote_fl_cnt.all_retained.num;
+      js["remote"]["deleted"]["not_found"]["num"] = remote_fl_cnt.deleted_not_found.num;
+      js["remote"]["deleted"]["expired"]["num"] = remote_fl_cnt.deleted_expired.num;
       js["remote"]["deleted"]["versions_old"]["num"] =
-          remote_fc.deleted_versions_old.num;
-      js["remote"]["deleted"]["total_num"] = remote_fc.deleted_not_found.num +
-                                            remote_fc.deleted_expired.num +
-                                            remote_fc.deleted_versions_old.num;
+          remote_fl_cnt.deleted_versions_old.num;
+      js["remote"]["deleted"]["total_num"] = remote_fl_cnt.deleted_not_found.num +
+                                            remote_fl_cnt.deleted_expired.num +
+                                            remote_fl_cnt.deleted_versions_old.num;
 
       if (JsonSmartBool(dump_options, "html", true)) {
         js["local"]["retained"]["keys_size"] =
-            SizeToString(local_fc.all_retained.keys_size);
+            SizeToString(local_fl_cnt.all_retained.keys_size);
         js["local"]["retained"]["vals_size"] =
-            SizeToString(local_fc.all_retained.vals_size);
+            SizeToString(local_fl_cnt.all_retained.vals_size);
         js["local"]["retained"]["total_size"] =
-            SizeToString(local_fc.all_retained.keys_size + local_fc.all_retained.vals_size);
+            SizeToString(local_fl_cnt.all_retained.keys_size + local_fl_cnt.all_retained.vals_size);
         js["local"]["deleted"]["not_found"]["keys_size"] =
-            SizeToString(local_fc.deleted_not_found.keys_size);
+            SizeToString(local_fl_cnt.deleted_not_found.keys_size);
         js["local"]["deleted"]["not_found"]["vals_size"] =
-            SizeToString(local_fc.deleted_not_found.vals_size);
+            SizeToString(local_fl_cnt.deleted_not_found.vals_size);
         js["local"]["deleted"]["not_found"]["total_size"] = SizeToString(
-            local_fc.deleted_not_found.keys_size + local_fc.deleted_not_found.vals_size);
+            local_fl_cnt.deleted_not_found.keys_size + local_fl_cnt.deleted_not_found.vals_size);
         js["local"]["deleted"]["expired"]["keys_size"] =
-            SizeToString(local_fc.deleted_expired.keys_size);
+            SizeToString(local_fl_cnt.deleted_expired.keys_size);
         js["local"]["deleted"]["expired"]["vals_size"] =
-            SizeToString(local_fc.deleted_expired.vals_size);
+            SizeToString(local_fl_cnt.deleted_expired.vals_size);
         js["local"]["deleted"]["expired"]["total_size"] = SizeToString(
-            local_fc.deleted_expired.keys_size + local_fc.deleted_expired.vals_size);
+            local_fl_cnt.deleted_expired.keys_size + local_fl_cnt.deleted_expired.vals_size);
         js["local"]["deleted"]["versions_old"]["keys_size"] =
-            SizeToString(local_fc.deleted_versions_old.keys_size);
+            SizeToString(local_fl_cnt.deleted_versions_old.keys_size);
         js["local"]["deleted"]["versions_old"]["vals_size"] =
-            SizeToString(local_fc.deleted_versions_old.vals_size);
+            SizeToString(local_fl_cnt.deleted_versions_old.vals_size);
         js["local"]["deleted"]["versions_old"]["total_size"] =
-            SizeToString(local_fc.deleted_versions_old.keys_size +
-                         local_fc.deleted_versions_old.vals_size);
+            SizeToString(local_fl_cnt.deleted_versions_old.keys_size +
+                         local_fl_cnt.deleted_versions_old.vals_size);
         js["local"]["deleted"]["total_keys_size"] = SizeToString(
-            local_fc.deleted_not_found.keys_size + local_fc.deleted_expired.keys_size +
-            local_fc.deleted_versions_old.keys_size);
+            local_fl_cnt.deleted_not_found.keys_size + local_fl_cnt.deleted_expired.keys_size +
+            local_fl_cnt.deleted_versions_old.keys_size);
         js["local"]["deleted"]["total_vals_size"] = SizeToString(
-            local_fc.deleted_not_found.vals_size + local_fc.deleted_expired.vals_size +
-            local_fc.deleted_versions_old.vals_size);
+            local_fl_cnt.deleted_not_found.vals_size + local_fl_cnt.deleted_expired.vals_size +
+            local_fl_cnt.deleted_versions_old.vals_size);
         js["local"]["deleted"]["total_size"] = SizeToString(
-            local_fc.deleted_not_found.keys_size + local_fc.deleted_not_found.vals_size +
-            local_fc.deleted_expired.keys_size + local_fc.deleted_expired.vals_size +
-            local_fc.deleted_versions_old.keys_size +
-            local_fc.deleted_versions_old.vals_size);
+            local_fl_cnt.deleted_not_found.keys_size + local_fl_cnt.deleted_not_found.vals_size +
+            local_fl_cnt.deleted_expired.keys_size + local_fl_cnt.deleted_expired.vals_size +
+            local_fl_cnt.deleted_versions_old.keys_size +
+            local_fl_cnt.deleted_versions_old.vals_size);
 
         js["remote"]["retained"]["keys_size"] =
-            SizeToString(remote_fc.all_retained.keys_size);
+            SizeToString(remote_fl_cnt.all_retained.keys_size);
         js["remote"]["retained"]["vals_size"] =
-            SizeToString(remote_fc.all_retained.vals_size);
+            SizeToString(remote_fl_cnt.all_retained.vals_size);
         js["remote"]["retained"]["total_size"] =
-            SizeToString(remote_fc.all_retained.keys_size + remote_fc.all_retained.vals_size);
+            SizeToString(remote_fl_cnt.all_retained.keys_size + remote_fl_cnt.all_retained.vals_size);
         js["remote"]["deleted"]["not_found"]["keys_size"] =
-            SizeToString(remote_fc.deleted_not_found.keys_size);
+            SizeToString(remote_fl_cnt.deleted_not_found.keys_size);
         js["remote"]["deleted"]["not_found"]["vals_size"] =
-            SizeToString(remote_fc.deleted_not_found.vals_size);
+            SizeToString(remote_fl_cnt.deleted_not_found.vals_size);
         js["remote"]["deleted"]["not_found"]["total_size"] = SizeToString(
-            remote_fc.deleted_not_found.keys_size + remote_fc.deleted_not_found.vals_size);
+            remote_fl_cnt.deleted_not_found.keys_size + remote_fl_cnt.deleted_not_found.vals_size);
         js["remote"]["deleted"]["expired"]["keys_size"] =
-            SizeToString(remote_fc.deleted_expired.keys_size);
+            SizeToString(remote_fl_cnt.deleted_expired.keys_size);
         js["remote"]["deleted"]["expired"]["vals_size"] =
-            SizeToString(remote_fc.deleted_expired.vals_size);
+            SizeToString(remote_fl_cnt.deleted_expired.vals_size);
         js["remote"]["deleted"]["expired"]["total_size"] = SizeToString(
-            remote_fc.deleted_expired.keys_size + remote_fc.deleted_expired.vals_size);
+            remote_fl_cnt.deleted_expired.keys_size + remote_fl_cnt.deleted_expired.vals_size);
         js["remote"]["deleted"]["versions_old"]["keys_size"] =
-            SizeToString(remote_fc.deleted_versions_old.keys_size);
+            SizeToString(remote_fl_cnt.deleted_versions_old.keys_size);
         js["remote"]["deleted"]["versions_old"]["vals_size"] =
-            SizeToString(remote_fc.deleted_versions_old.vals_size);
+            SizeToString(remote_fl_cnt.deleted_versions_old.vals_size);
         js["remote"]["deleted"]["versions_old"]["total_size"] =
-            SizeToString(remote_fc.deleted_versions_old.keys_size +
-                         remote_fc.deleted_versions_old.vals_size);
+            SizeToString(remote_fl_cnt.deleted_versions_old.keys_size +
+                         remote_fl_cnt.deleted_versions_old.vals_size);
         js["remote"]["deleted"]["total_keys_size"] = SizeToString(
-            remote_fc.deleted_not_found.keys_size + remote_fc.deleted_expired.keys_size +
-            remote_fc.deleted_versions_old.keys_size);
+            remote_fl_cnt.deleted_not_found.keys_size + remote_fl_cnt.deleted_expired.keys_size +
+            remote_fl_cnt.deleted_versions_old.keys_size);
         js["remote"]["deleted"]["total_vals_size"] = SizeToString(
-            remote_fc.deleted_not_found.vals_size + remote_fc.deleted_expired.vals_size +
-            remote_fc.deleted_versions_old.vals_size);
+            remote_fl_cnt.deleted_not_found.vals_size + remote_fl_cnt.deleted_expired.vals_size +
+            remote_fl_cnt.deleted_versions_old.vals_size);
         js["remote"]["deleted"]["total_size"] = SizeToString(
-            remote_fc.deleted_not_found.keys_size + remote_fc.deleted_not_found.vals_size +
-            remote_fc.deleted_expired.keys_size + remote_fc.deleted_expired.vals_size +
-            remote_fc.deleted_versions_old.keys_size +
-            remote_fc.deleted_versions_old.vals_size);
+            remote_fl_cnt.deleted_not_found.keys_size + remote_fl_cnt.deleted_not_found.vals_size +
+            remote_fl_cnt.deleted_expired.keys_size + remote_fl_cnt.deleted_expired.vals_size +
+            remote_fl_cnt.deleted_versions_old.keys_size +
+            remote_fl_cnt.deleted_versions_old.vals_size);
       } else {
-        js["local"]["retained"]["keys_size"] = local_fc.all_retained.keys_size;
-        js["local"]["retained"]["vals_size"] = local_fc.all_retained.vals_size;
+        js["local"]["retained"]["keys_size"] = local_fl_cnt.all_retained.keys_size;
+        js["local"]["retained"]["vals_size"] = local_fl_cnt.all_retained.vals_size;
         js["local"]["retained"]["total_size"] =
-            local_fc.all_retained.keys_size + local_fc.all_retained.vals_size;
+            local_fl_cnt.all_retained.keys_size + local_fl_cnt.all_retained.vals_size;
         js["local"]["deleted"]["not_found"]["keys_size"] =
-            local_fc.deleted_not_found.keys_size;
+            local_fl_cnt.deleted_not_found.keys_size;
         js["local"]["deleted"]["not_found"]["vals_size"] =
-            local_fc.deleted_not_found.vals_size;
+            local_fl_cnt.deleted_not_found.vals_size;
         js["local"]["deleted"]["not_found"]["total_size"] =
-            local_fc.deleted_not_found.keys_size + local_fc.deleted_not_found.vals_size;
+            local_fl_cnt.deleted_not_found.keys_size + local_fl_cnt.deleted_not_found.vals_size;
         js["local"]["deleted"]["expired"]["keys_size"] =
-            local_fc.deleted_expired.keys_size;
+            local_fl_cnt.deleted_expired.keys_size;
         js["local"]["deleted"]["expired"]["vals_size"] =
-            local_fc.deleted_expired.vals_size;
+            local_fl_cnt.deleted_expired.vals_size;
         js["local"]["deleted"]["expired"]["total_size"] =
-            local_fc.deleted_expired.keys_size + local_fc.deleted_expired.vals_size;
+            local_fl_cnt.deleted_expired.keys_size + local_fl_cnt.deleted_expired.vals_size;
         js["local"]["deleted"]["versions_old"]["keys_size"] =
-            local_fc.deleted_versions_old.keys_size;
+            local_fl_cnt.deleted_versions_old.keys_size;
         js["local"]["deleted"]["versions_old"]["vals_size"] =
-            local_fc.deleted_versions_old.vals_size;
+            local_fl_cnt.deleted_versions_old.vals_size;
         js["local"]["deleted"]["versions_old"]["total_size"] =
-            local_fc.deleted_versions_old.keys_size +
-            local_fc.deleted_versions_old.vals_size;
+            local_fl_cnt.deleted_versions_old.keys_size +
+            local_fl_cnt.deleted_versions_old.vals_size;
         js["local"]["deleted"]["total_keys_size"] =
-            local_fc.deleted_not_found.keys_size + local_fc.deleted_expired.keys_size +
-            local_fc.deleted_versions_old.keys_size;
+            local_fl_cnt.deleted_not_found.keys_size + local_fl_cnt.deleted_expired.keys_size +
+            local_fl_cnt.deleted_versions_old.keys_size;
         js["local"]["deleted"]["total_vals_size"] =
-            local_fc.deleted_not_found.vals_size + local_fc.deleted_expired.vals_size +
-            local_fc.deleted_versions_old.vals_size;
+            local_fl_cnt.deleted_not_found.vals_size + local_fl_cnt.deleted_expired.vals_size +
+            local_fl_cnt.deleted_versions_old.vals_size;
         js["local"]["deleted"]["total_size"] =
-            local_fc.deleted_not_found.keys_size + local_fc.deleted_not_found.vals_size +
-            local_fc.deleted_expired.keys_size + local_fc.deleted_expired.vals_size +
-            local_fc.deleted_versions_old.keys_size +
-            local_fc.deleted_versions_old.vals_size;
+            local_fl_cnt.deleted_not_found.keys_size + local_fl_cnt.deleted_not_found.vals_size +
+            local_fl_cnt.deleted_expired.keys_size + local_fl_cnt.deleted_expired.vals_size +
+            local_fl_cnt.deleted_versions_old.keys_size +
+            local_fl_cnt.deleted_versions_old.vals_size;
 
-        js["remote"]["retained"]["keys_size"] = remote_fc.all_retained.keys_size;
-        js["remote"]["retained"]["vals_size"] = remote_fc.all_retained.vals_size;
+        js["remote"]["retained"]["keys_size"] = remote_fl_cnt.all_retained.keys_size;
+        js["remote"]["retained"]["vals_size"] = remote_fl_cnt.all_retained.vals_size;
         js["remote"]["retained"]["total_size"] =
-            remote_fc.all_retained.keys_size + remote_fc.all_retained.vals_size;
+            remote_fl_cnt.all_retained.keys_size + remote_fl_cnt.all_retained.vals_size;
         js["remote"]["deleted"]["not_found"]["keys_size"] =
-            remote_fc.deleted_not_found.keys_size;
+            remote_fl_cnt.deleted_not_found.keys_size;
         js["remote"]["deleted"]["not_found"]["vals_size"] =
-            remote_fc.deleted_not_found.vals_size;
+            remote_fl_cnt.deleted_not_found.vals_size;
         js["remote"]["deleted"]["not_found"]["total_size"] =
-            remote_fc.deleted_not_found.keys_size + remote_fc.deleted_not_found.vals_size;
+            remote_fl_cnt.deleted_not_found.keys_size + remote_fl_cnt.deleted_not_found.vals_size;
         js["remote"]["deleted"]["expired"]["keys_size"] =
-            remote_fc.deleted_expired.keys_size;
+            remote_fl_cnt.deleted_expired.keys_size;
         js["remote"]["deleted"]["expired"]["vals_size"] =
-            remote_fc.deleted_expired.vals_size;
+            remote_fl_cnt.deleted_expired.vals_size;
         js["remote"]["deleted"]["expired"]["total_size"] =
-            remote_fc.deleted_expired.keys_size + remote_fc.deleted_expired.vals_size;
+            remote_fl_cnt.deleted_expired.keys_size + remote_fl_cnt.deleted_expired.vals_size;
         js["remote"]["deleted"]["versions_old"]["keys_size"] =
-            remote_fc.deleted_versions_old.keys_size;
+            remote_fl_cnt.deleted_versions_old.keys_size;
         js["remote"]["deleted"]["versions_old"]["vals_size"] =
-            remote_fc.deleted_versions_old.vals_size;
+            remote_fl_cnt.deleted_versions_old.vals_size;
         js["remote"]["deleted"]["versions_old"]["total_size"] =
-            remote_fc.deleted_versions_old.keys_size +
-            remote_fc.deleted_versions_old.vals_size;
+            remote_fl_cnt.deleted_versions_old.keys_size +
+            remote_fl_cnt.deleted_versions_old.vals_size;
         js["remote"]["deleted"]["total_keys_size"] =
-            remote_fc.deleted_not_found.keys_size + remote_fc.deleted_expired.keys_size +
-            remote_fc.deleted_versions_old.keys_size;
+            remote_fl_cnt.deleted_not_found.keys_size + remote_fl_cnt.deleted_expired.keys_size +
+            remote_fl_cnt.deleted_versions_old.keys_size;
         js["remote"]["deleted"]["total_vals_size"] =
-            remote_fc.deleted_not_found.vals_size + remote_fc.deleted_expired.vals_size +
-            remote_fc.deleted_versions_old.vals_size;
+            remote_fl_cnt.deleted_not_found.vals_size + remote_fl_cnt.deleted_expired.vals_size +
+            remote_fl_cnt.deleted_versions_old.vals_size;
         js["remote"]["deleted"]["total_size"] =
-            remote_fc.deleted_not_found.keys_size + remote_fc.deleted_not_found.vals_size +
-            remote_fc.deleted_expired.keys_size + remote_fc.deleted_expired.vals_size +
-            remote_fc.deleted_versions_old.keys_size +
-            remote_fc.deleted_versions_old.vals_size;
+            remote_fl_cnt.deleted_not_found.keys_size + remote_fl_cnt.deleted_not_found.vals_size +
+            remote_fl_cnt.deleted_expired.keys_size + remote_fl_cnt.deleted_expired.vals_size +
+            remote_fl_cnt.deleted_versions_old.keys_size +
+            remote_fl_cnt.deleted_versions_old.vals_size;
       }
 
       return JsonToString(js, dump_options);

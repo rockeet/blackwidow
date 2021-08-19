@@ -29,7 +29,7 @@ class ListsMetaFilter : public rocksdb::CompactionFilter {
               const rocksdb::Slice& value,
               std::string* new_value, bool* value_changed) const override {
 
-    fc.exec_filter_times++;
+    fl_cnt.exec_filter_times++;
 
     int32_t cur_time = static_cast<int32_t>(unix_time);
     ParsedListsMetaValue parsed_lists_meta_value(value);
@@ -45,22 +45,22 @@ class ListsMetaFilter : public rocksdb::CompactionFilter {
       && parsed_lists_meta_value.timestamp() < cur_time
       && parsed_lists_meta_value.version() < cur_time) {
       Trace("Drop[Stale & version < cur_time]");
-      fc.deleted_expired.count_info(key, value);
+      fl_cnt.deleted_expired.count_info(key, value);
       return true;
     }
     if (parsed_lists_meta_value.count() == 0
       && parsed_lists_meta_value.version() < cur_time) {
       Trace("Drop[Empty & version < cur_time]");
-      fc.deleted_versions_old.count_info(key, value);
+      fl_cnt.deleted_versions_old.count_info(key, value);
       return true;
     }
     Trace("Reserve");
-    fc.all_retained.count_info(key, value);
+    fl_cnt.all_retained.count_info(key, value);
     return false;
   }
   int64_t unix_time;
 
-  mutable FilterCounter fc;
+  mutable FilterCounter fl_cnt;
   const ListsMetaFilterFactory* factory = nullptr;
 
   const char* Name() const override { return "ListsMetaFilter"; }
@@ -76,8 +76,8 @@ class ListsMetaFilterFactory : public rocksdb::CompactionFilterFactory {
   }
   int64_t unix_time_;
 
-  mutable FilterCounter local_fc;
-  mutable FilterCounter remote_fc;
+  mutable FilterCounter local_fl_cnt;
+  mutable FilterCounter remote_fl_cnt;
 };
 
 class ListsDataFilterFactory;
@@ -98,7 +98,7 @@ class ListsDataFilter : public rocksdb::CompactionFilter {
               const rocksdb::Slice& value,
               std::string* new_value, bool* value_changed) const override {
 
-    fc.exec_filter_times++;
+    fl_cnt.exec_filter_times++;
 
     if (nullptr == db_ || nullptr == cf_handles_ptr_) {
       return false;
@@ -116,7 +116,7 @@ class ListsDataFilter : public rocksdb::CompactionFilter {
       std::string meta_value;
       // destroyed when close the database, Reserve Current key value
       if (cf_handles_ptr_->size() == 0) {
-        fc.all_retained.count_info(key, value);
+        fl_cnt.all_retained.count_info(key, value);
         return false;
       }
       Status s = db_->Get(default_read_options_,
@@ -131,37 +131,37 @@ class ListsDataFilter : public rocksdb::CompactionFilter {
       } else {
         cur_key_ = "";
         Trace("Reserve[Get meta_key faild]");
-        fc.all_retained.count_info(key, value);
+        fl_cnt.all_retained.count_info(key, value);
         return false;
       }
     }
 
     if (meta_not_found_) {
       Trace("Drop[Meta key not exist]");
-      fc.deleted_not_found.count_info(key, value);
+      fl_cnt.deleted_not_found.count_info(key, value);
       return true;
     }
 
     if (cur_meta_timestamp_ != 0
       && cur_meta_timestamp_ < static_cast<int32_t>(unix_time)) {
       Trace("Drop[Timeout]");
-      fc.deleted_expired.count_info(key, value);
+      fl_cnt.deleted_expired.count_info(key, value);
       return true;
     }
 
     if (cur_meta_version_ > parsed_lists_data_key.version()) {
       Trace("Drop[list_data_key_version < cur_meta_version]");
-      fc.deleted_versions_old.count_info(key, value);
+      fl_cnt.deleted_versions_old.count_info(key, value);
       return true;
     } else {
       Trace("Reserve[list_data_key_version == cur_meta_version]");
-      fc.all_retained.count_info(key, value);
+      fl_cnt.all_retained.count_info(key, value);
       return false;
     }
   }
   int64_t unix_time;
 
-  mutable FilterCounter fc;
+  mutable FilterCounter fl_cnt;
   const ListsDataFilterFactory* factory;
 
   const char* Name() const override { return "ListsDataFilter"; }
@@ -196,8 +196,8 @@ class ListsDataFilterFactory : public rocksdb::CompactionFilterFactory {
   int64_t unix_time_;
   size_t meta_ttl_num_;
 
-  mutable FilterCounter local_fc;
-  mutable FilterCounter remote_fc;
+  mutable FilterCounter local_fl_cnt;
+  mutable FilterCounter remote_fl_cnt;
 };
 
 
