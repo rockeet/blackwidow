@@ -2,28 +2,24 @@
 
 namespace blackwidow {
 
-void FilterCounter::add(const FilterCounter &f) {
-  mtx.lock();
-  this->exec_filter_times += f.exec_filter_times;
-  this->total_reserved_kv_num += f.total_reserved_kv_num;
-  this->total_reserved_keys_size += f.total_reserved_keys_size;
-  this->total_reserved_vals_size += f.total_reserved_vals_size;
-  this->deleted_not_found_keys_num += f.deleted_not_found_keys_num;
-  this->deleted_expired_keys_num += f.deleted_expired_keys_num;
-  this->deleted_versions_old_keys_num += f.deleted_versions_old_keys_num;
-  this->total_deleted_keys_size += f.total_deleted_keys_size;
-  this->total_deleted_vals_size += f.total_deleted_vals_size;
-  mtx.unlock();
+void FilterKeysInfo::count_info(const rocksdb::Slice& key, const rocksdb::Slice& val) {
+  num++;
+  keys_size += key.size();
+  vals_size += val.size();
+}
+void FilterKeysInfo::add(const FilterKeysInfo& f) {
+  this->num += f.num;
+  this->keys_size += f.keys_size;
+  this->vals_size += f.vals_size;
 }
 
-void FilterCounter::count_reserved_kv(const rocksdb::Slice& key, const rocksdb::Slice& value) {
-  ++total_reserved_kv_num;
-  total_reserved_keys_size += key.size();
-  total_reserved_vals_size += value.size();
-}
-void FilterCounter::count_deleted_kv(const rocksdb::Slice& key, const rocksdb::Slice& value) {
-  total_deleted_keys_size += key.size();
-  total_deleted_vals_size += value.size();
+void FilterCounter::add(const FilterCounter &f) {
+  mtx.lock();
+  this->all_retained.add(f.all_retained);
+  this->deleted_not_found.add(f.deleted_not_found);
+  this->deleted_expired.add(f.deleted_expired);
+  this->deleted_versions_old.add(f.deleted_versions_old);
+  mtx.unlock();
 }
 
 } // namespace blackwidow

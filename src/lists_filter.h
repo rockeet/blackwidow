@@ -45,19 +45,17 @@ class ListsMetaFilter : public rocksdb::CompactionFilter {
       && parsed_lists_meta_value.timestamp() < cur_time
       && parsed_lists_meta_value.version() < cur_time) {
       Trace("Drop[Stale & version < cur_time]");
-      fc.deleted_expired_keys_num++;
-      fc.count_deleted_kv(key, value);
+      fc.deleted_expired.count_info(key, value);
       return true;
     }
     if (parsed_lists_meta_value.count() == 0
       && parsed_lists_meta_value.version() < cur_time) {
       Trace("Drop[Empty & version < cur_time]");
-      fc.deleted_versions_old_keys_num++;
-      fc.count_deleted_kv(key, value);
+      fc.deleted_versions_old.count_info(key, value);
       return true;
     }
     Trace("Reserve");
-    fc.count_reserved_kv(key, value);
+    fc.all_retained.count_info(key, value);
     return false;
   }
   int64_t unix_time;
@@ -118,7 +116,7 @@ class ListsDataFilter : public rocksdb::CompactionFilter {
       std::string meta_value;
       // destroyed when close the database, Reserve Current key value
       if (cf_handles_ptr_->size() == 0) {
-        fc.count_reserved_kv(key, value);
+        fc.all_retained.count_info(key, value);
         return false;
       }
       Status s = db_->Get(default_read_options_,
@@ -133,34 +131,31 @@ class ListsDataFilter : public rocksdb::CompactionFilter {
       } else {
         cur_key_ = "";
         Trace("Reserve[Get meta_key faild]");
-        fc.count_reserved_kv(key, value);
+        fc.all_retained.count_info(key, value);
         return false;
       }
     }
 
     if (meta_not_found_) {
       Trace("Drop[Meta key not exist]");
-      fc.deleted_not_found_keys_num++;
-      fc.count_deleted_kv(key, value);
+      fc.deleted_not_found.count_info(key, value);
       return true;
     }
 
     if (cur_meta_timestamp_ != 0
       && cur_meta_timestamp_ < static_cast<int32_t>(unix_time)) {
       Trace("Drop[Timeout]");
-      fc.deleted_expired_keys_num++;
-      fc.count_deleted_kv(key, value);
+      fc.deleted_expired.count_info(key, value);
       return true;
     }
 
     if (cur_meta_version_ > parsed_lists_data_key.version()) {
       Trace("Drop[list_data_key_version < cur_meta_version]");
-      fc.deleted_versions_old_keys_num++;
-      fc.count_deleted_kv(key, value);
+      fc.deleted_versions_old.count_info(key, value);
       return true;
     } else {
       Trace("Reserve[list_data_key_version == cur_meta_version]");
-      fc.count_reserved_kv(key, value);
+      fc.all_retained.count_info(key, value);
       return false;
     }
   }

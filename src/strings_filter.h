@@ -41,12 +41,11 @@ class StringsFilter : public rocksdb::CompactionFilter {
     if (parsed_strings_value.timestamp() != 0
       && parsed_strings_value.timestamp() < cur_time) {
       Trace("Drop[Stale]");
-      fc.deleted_expired_keys_num++;
-      fc.count_deleted_kv(key, value);
+      fc.deleted_expired.count_info(key, value);
       return true;
     } else {
       Trace("Reserve");
-      fc.count_reserved_kv(key, value);
+      fc.all_retained.count_info(key, value);
       return false;
     }
   }
