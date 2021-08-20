@@ -15,6 +15,8 @@
 #include "src/base_data_key_format.h"
 #include "rocksdb/compaction_filter.h"
 
+#include "src/filter_counter.h"
+
 namespace rocksdb {
   class ColumnFamilyHandle;
 }
@@ -24,12 +26,18 @@ namespace blackwidow {
 
 rocksdb::Iterator* NewMetaIter(rocksdb::DB*, ColumnFamilyHandle*, uint64_t);
 
+class BaseMetaFilterFactory;
+
 class BaseMetaFilter : public rocksdb::CompactionFilter {
  public:
   BaseMetaFilter() = default;
+  ~BaseMetaFilter();
   bool Filter(int level, const rocksdb::Slice& key,
               const rocksdb::Slice& value,
               std::string* new_value, bool* value_changed) const override {
+    
+    fl_cnt.exec_filter_times++;
+
     int32_t cur_time = static_cast<int32_t>(unix_time);
     ParsedBaseMetaValue parsed_base_meta_value(value);
     Trace("==========================START==========================");
@@ -44,17 +52,23 @@ class BaseMetaFilter : public rocksdb::CompactionFilter {
       && parsed_base_meta_value.timestamp() < cur_time
       && parsed_base_meta_value.version() < cur_time) {
       Trace("Drop[Stale & version < cur_time]");
+      fl_cnt.deleted_expired.count_info(key, value);
       return true;
     }
     if (parsed_base_meta_value.count() == 0
       && parsed_base_meta_value.version() < cur_time) {
       Trace("Drop[Empty & version < cur_time]");
+      fl_cnt.deleted_versions_old.count_info(key, value);
       return true;
     }
     Trace("Reserve");
+    fl_cnt.all_retained.count_info(key, value);
     return false;
   }
   int64_t unix_time = 0;
+
+  mutable FilterCounter fl_cnt;
+  const BaseMetaFilterFactory* factory = nullptr;
 
   const char* Name() const override { return "BaseMetaFilter"; }
 };
@@ -68,7 +82,13 @@ class BaseMetaFilterFactory : public rocksdb::CompactionFilterFactory {
     return "BaseMetaFilterFactory";
   }
   uint64_t unix_time_ = 0; // only used by compact worker
+
+  mutable FilterCounter local_fl_cnt;
+  mutable FilterCounter remote_fl_cnt;
 };
+
+
+class BaseDataFilterFactory;
 
 class BaseDataFilter : public rocksdb::CompactionFilter {
  public:
@@ -85,6 +105,9 @@ class BaseDataFilter : public rocksdb::CompactionFilter {
   bool Filter(int level, const Slice& key,
               const rocksdb::Slice& value,
               std::string* new_value, bool* value_changed) const override {
+    
+    fl_cnt.exec_filter_times++;
+
     if (nullptr == db_ || nullptr == cf_handles_ptr_) {
       return false;
     }
@@ -100,6 +123,7 @@ class BaseDataFilter : public rocksdb::CompactionFilter {
       std::string meta_value;
       // destroyed when close the database, Reserve Current key value
       if (cf_handles_ptr_->size() == 0) {
+        fl_cnt.all_retained.count_info(key, value);
         return false;
       }
     #if 0
@@ -137,30 +161,38 @@ class BaseDataFilter : public rocksdb::CompactionFilter {
       } else {
         cur_key_ = "";
         Trace("Reserve[Get meta_key faild]");
+        fl_cnt.all_retained.count_info(key, value);
         return false;
       }
     }
 
     if (meta_not_found_) {
       Trace("Drop[Meta key not exist]");
+      fl_cnt.deleted_not_found.count_info(key, value);
       return true;
     }
 
     if (cur_meta_timestamp_ != 0
       && cur_meta_timestamp_ < static_cast<int32_t>(unix_time)) {
       Trace("Drop[Timeout]");
+      fl_cnt.deleted_expired.count_info(key, value);
       return true;
     }
 
     if (cur_meta_version_ > parsed_base_data_key.version()) {
       Trace("Drop[data_key_version < cur_meta_version]");
+      fl_cnt.deleted_versions_old.count_info(key, value);
       return true;
     } else {
       Trace("Reserve[data_key_version == cur_meta_version]");
+      fl_cnt.all_retained.count_info(key, value);
       return false;
     }
   }
   int64_t unix_time;
+
+  mutable FilterCounter fl_cnt;
+  const BaseDataFilterFactory* factory = nullptr;
 
   const char* Name() const override { return "BaseDataFilter"; }
 
@@ -193,6 +225,9 @@ class BaseDataFilterFactory : public rocksdb::CompactionFilterFactory {
   std::vector<rocksdb::ColumnFamilyHandle*>* cf_handles_ptr_;
   uint64_t unix_time_;
   size_t meta_ttl_num_;
+
+  mutable FilterCounter local_fl_cnt;
+  mutable FilterCounter remote_fl_cnt;
 };
 
 typedef BaseMetaFilter HashesMetaFilter;

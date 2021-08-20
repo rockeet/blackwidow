@@ -19,6 +19,8 @@
 
 namespace blackwidow {
 
+class ZSetsScoreFilterFactory;
+
 class ZSetsScoreFilter : public rocksdb::CompactionFilter {
  public:
   ZSetsScoreFilter(rocksdb::DB* db,
@@ -28,11 +30,15 @@ class ZSetsScoreFilter : public rocksdb::CompactionFilter {
     meta_not_found_(false),
     cur_meta_version_(0),
     cur_meta_timestamp_(0) {}
+  ~ZSetsScoreFilter();
 
   bool Filter(int level, const rocksdb::Slice& key,
               const rocksdb::Slice& value,
               std::string* new_value,
               bool* value_changed) const override {
+
+    fl_cnt.exec_filter_times++;
+
     if (nullptr == db_ || nullptr == cf_handles_ptr_) {
       return false;
     }
@@ -49,6 +55,7 @@ class ZSetsScoreFilter : public rocksdb::CompactionFilter {
       std::string meta_value;
       // destroyed when close the database, Reserve Current key value
       if (cf_handles_ptr_->size() == 0) {
+        fl_cnt.all_retained.count_info(key, value);
         return false;
       }
       Status s = db_->Get(default_read_options_,
@@ -63,29 +70,37 @@ class ZSetsScoreFilter : public rocksdb::CompactionFilter {
       } else {
         cur_key_ = "";
         Trace("Reserve[Get meta_key faild]");
+        fl_cnt.all_retained.count_info(key, value);
         return false;
       }
     }
 
     if (meta_not_found_) {
       Trace("Drop[Meta key not exist]");
+      fl_cnt.deleted_not_found.count_info(key, value);
       return true;
     }
 
     if (cur_meta_timestamp_ != 0 &&
         cur_meta_timestamp_ < static_cast<int32_t>(unix_time)) {
       Trace("Drop[Timeout]");
+      fl_cnt.deleted_expired.count_info(key, value);
       return true;
     }
     if (cur_meta_version_ > parsed_zsets_score_key.version()) {
       Trace("Drop[score_key_version < cur_meta_version]");
+      fl_cnt.deleted_versions_old.count_info(key, value);
       return true;
     } else {
       Trace("Reserve[score_key_version == cur_meta_version]");
+      fl_cnt.all_retained.count_info(key, value);
       return false;
     }
   }
   int64_t unix_time;
+
+  mutable FilterCounter fl_cnt;
+  const ZSetsScoreFilterFactory* factory = nullptr;
 
   const char* Name() const override { return "ZSetsScoreFilter";}
 
@@ -119,6 +134,9 @@ class ZSetsScoreFilterFactory : public rocksdb::CompactionFilterFactory {
   std::vector<rocksdb::ColumnFamilyHandle*>* cf_handles_ptr_;
   uint64_t unix_time_;
   size_t meta_ttl_num_;
+
+  mutable FilterCounter local_fl_cnt;
+  mutable FilterCounter remote_fl_cnt;
 };
 
 }  //  namespace blackwidow

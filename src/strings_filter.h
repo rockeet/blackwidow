@@ -13,14 +13,22 @@
 #include "rocksdb/compaction_filter.h"
 #include "src/debug.h"
 
+#include "src/filter_counter.h"
+
 namespace blackwidow {
+
+class StringsFilterFactory;
 
 class StringsFilter : public rocksdb::CompactionFilter {
  public:
   StringsFilter() = default;
+  ~StringsFilter();
   bool Filter(int level, const rocksdb::Slice& key,
               const rocksdb::Slice& value,
               std::string* new_value, bool* value_changed) const override {
+
+    fl_cnt.exec_filter_times++;
+
     int32_t cur_time = static_cast<int32_t>(unix_time);
     ParsedStringsValue parsed_strings_value(value);
     Trace("==========================START==========================");
@@ -33,13 +41,18 @@ class StringsFilter : public rocksdb::CompactionFilter {
     if (parsed_strings_value.timestamp() != 0
       && parsed_strings_value.timestamp() < cur_time) {
       Trace("Drop[Stale]");
+      fl_cnt.deleted_expired.count_info(key, value);
       return true;
     } else {
       Trace("Reserve");
+      fl_cnt.all_retained.count_info(key, value);
       return false;
     }
   }
   int64_t unix_time;
+
+  mutable FilterCounter fl_cnt;
+  const StringsFilterFactory* factory = nullptr;
 
   const char* Name() const override { return "StringsFilter"; }
 };
@@ -53,6 +66,9 @@ class StringsFilterFactory : public rocksdb::CompactionFilterFactory {
     return "StringsFilterFactory";
   }
   uint64_t unix_time_ = 0; // only used by compact worker
+
+  mutable FilterCounter local_fl_cnt;
+  mutable FilterCounter remote_fl_cnt;
 };
 
 }  //  namespace blackwidow

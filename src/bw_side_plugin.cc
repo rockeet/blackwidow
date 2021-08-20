@@ -24,10 +24,12 @@
 #include "lists_filter.h"
 #include "zsets_filter.h"
 #include "strings_filter.h"
+#include "src/filter_counter.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+
 
 namespace blackwidow {
 
@@ -52,13 +54,21 @@ using namespace terark;
 #define INFO(...) PrintLog(2, "INFO: " __VA_ARGS__)
 #define WARN(...) PrintLog(1, "WARN: " __VA_ARGS__)
 
+
 ROCKSDB_REG_DEFAULT_CONS( BaseMetaFilterFactory, CompactionFilterFactory);
 ROCKSDB_REG_DEFAULT_CONS(ListsMetaFilterFactory, CompactionFilterFactory);
 ROCKSDB_REG_DEFAULT_CONS(  StringsFilterFactory, CompactionFilterFactory);
 
+
 BaseDataFilter::~BaseDataFilter() {
   delete iter_;
+  factory->local_fl_cnt.add(this->fl_cnt);
 }
+BaseMetaFilter::~BaseMetaFilter() { factory->local_fl_cnt.add(this->fl_cnt); }
+ListsMetaFilter::~ListsMetaFilter() { factory->local_fl_cnt.add(this->fl_cnt); }
+ListsDataFilter::~ListsDataFilter() { factory->local_fl_cnt.add(this->fl_cnt); }
+StringsFilter::~StringsFilter() { factory->local_fl_cnt.add(this->fl_cnt); }
+ZSetsScoreFilter::~ZSetsScoreFilter() { factory->local_fl_cnt.add(this->fl_cnt); }
 
 template<class Base>
 struct FilterFac : public Base {
@@ -132,6 +142,7 @@ static std::unique_ptr<CompactionFilter> Tpl_SimpleNewFilter(const Factory* fac)
   } else {
     rocksdb::Env::Default()->GetCurrentTime(&filter->unix_time);
   }
+  filter->factory = fac;  // give the Factory pointer to the filer
   return std::unique_ptr<CompactionFilter>(filter);
 }
 
@@ -148,14 +159,17 @@ ListsMetaFilterFactory::CreateCompactionFilter(const CompactionFilterContext&) {
   return Tpl_SimpleNewFilter<ListsMetaFilter>(this);
 }
 
+
+DATA_IO_DUMP_RAW_MEM_E(FilterCounter)
+
 template<class ConcreteFactory>
 struct SimpleFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
   void Serialize(FILE* output, const CompactionFilterFactory& base)
   const override {
-    //auto& fac = dynamic_cast<const ConcreteFactory&>(base);
+    auto& fac = dynamic_cast<const ConcreteFactory&>(base);
     LittleEndianDataOutput<NonOwnerFileStream> dio(output);
     if (IsCompactionWorker()) {
-      // do nothing
+      dio << fac.local_fl_cnt;
     }
     else {
       int64_t unix_time;
@@ -166,12 +180,14 @@ struct SimpleFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
   void DeSerialize(FILE* reader, CompactionFilterFactory* base)
   const override {
     auto fac = dynamic_cast<ConcreteFactory*>(base);
+    LittleEndianDataInput<NonOwnerFileStream> dio(reader);
     if (IsCompactionWorker()) {
-      LittleEndianDataInput<NonOwnerFileStream> dio(reader);
       dio >> fac->unix_time_;
     }
     else {
-      // do nothing
+      FilterCounter temp_fl_cnt;
+      dio >> temp_fl_cnt;
+      fac->remote_fl_cnt.add(temp_fl_cnt);
     }
   }
 };
@@ -233,6 +249,9 @@ public:
   bool Filter(int level, const Slice& key,
               const rocksdb::Slice& value,
               std::string* new_value, bool* value_changed) const override {
+
+    fl_cnt.exec_filter_times++;
+
     ParsedBaseDataKey parsed_base_data_key(key, &parse_key_buf_);
     Trace("==========================START==========================");
     Trace("[DataFilter], key: %s, data = %s, version = %d",
@@ -254,20 +273,24 @@ public:
 
     if (meta_not_found_) {
       Trace("Drop[Meta key not exist]");
+      fl_cnt.deleted_not_found.count_info(key, value);
       return true;
     }
 
     if (cur_meta_timestamp_ != 0
       && cur_meta_timestamp_ < static_cast<int32_t>(unix_time)) {
       Trace("Drop[Timeout]");
+      fl_cnt.deleted_expired.count_info(key, value);
       return true;
     }
 
     if (cur_meta_version_ > parsed_base_data_key.version()) {
       Trace("Drop[data_key_version < cur_meta_version]");
+      fl_cnt.deleted_versions_old.count_info(key, value);
       return true;
     } else {
       Trace("Reserve[data_key_version == cur_meta_version]");
+      fl_cnt.all_retained.count_info(key, value);
       return false;
     }
   }
@@ -281,6 +304,9 @@ public:
   bool Filter(int level, const Slice& key,
               const rocksdb::Slice& value,
               std::string* new_value, bool* value_changed) const override {
+              
+    fl_cnt.exec_filter_times++;
+
     ParsedListsDataKey parsed_lists_data_key(key, &parse_key_buf_);
     Trace("==========================START==========================");
     Trace("[DataFilter], key: %s, index = %lu, data = %s, version = %d",
@@ -303,20 +329,24 @@ public:
 
     if (meta_not_found_) {
       Trace("Drop[Meta key not exist]");
+      fl_cnt.deleted_not_found.count_info(key, value);
       return true;
     }
 
     if (cur_meta_timestamp_ != 0
       && cur_meta_timestamp_ < static_cast<int32_t>(unix_time)) {
       Trace("Drop[Timeout]");
+      fl_cnt.deleted_expired.count_info(key, value);
       return true;
     }
 
     if (cur_meta_version_ > parsed_lists_data_key.version()) {
       Trace("Drop[list_data_key_version < cur_meta_version]");
+      fl_cnt.deleted_versions_old.count_info(key, value);
       return true;
     } else {
       Trace("Reserve[list_data_key_version == cur_meta_version]");
+      fl_cnt.all_retained.count_info(key, value);
       return false;
     }
   }
@@ -330,6 +360,9 @@ public:
   bool Filter(int level, const Slice& key,
               const rocksdb::Slice& value,
               std::string* new_value, bool* value_changed) const override {
+
+    fl_cnt.exec_filter_times++;
+
     ParsedZSetsScoreKey parsed_zsets_score_key(key, &parse_key_buf_);
     Trace("==========================START==========================");
     Trace("[ScoreFilter], key: %s, score = %lf, member = %s, version = %d",
@@ -352,19 +385,23 @@ public:
 
     if (meta_not_found_) {
       Trace("Drop[Meta key not exist]");
+      fl_cnt.deleted_not_found.count_info(key, value);
       return true;
     }
 
     if (cur_meta_timestamp_ != 0 &&
         cur_meta_timestamp_ < static_cast<int32_t>(unix_time)) {
       Trace("Drop[Timeout]");
+      fl_cnt.deleted_expired.count_info(key, value);
       return true;
     }
     if (cur_meta_version_ > parsed_zsets_score_key.version()) {
       Trace("Drop[score_key_version < cur_meta_version]");
+      fl_cnt.deleted_versions_old.count_info(key, value);
       return true;
     } else {
       Trace("Reserve[score_key_version == cur_meta_version]");
+      fl_cnt.all_retained.count_info(key, value);
       return false;
     }
   }
@@ -378,6 +415,7 @@ HosterSideNewFilter(Factory* fac, const CompactionFilterContext& ctx) {
     auto filter = new HosterFilter(dbp ? *dbp : NULL, fac->cf_handles_ptr_);
     filter->smallest_seqno_ = ctx.smallest_seqno;
     rocksdb::Env::Default()->GetCurrentTime(&filter->unix_time);
+    filter->factory = fac;  // give the Factory pointer to the filer
     return std::unique_ptr<CompactionFilter>(filter);
 }
 
@@ -389,6 +427,7 @@ SideNewFilter(Factory* fac, const CompactionFilterContext& ctx) {
     filter->unix_time = fac->unix_time_;
     filter->m_ttl.OpenFile(*fac->m_cp);
     filter->m_ttl.meta_ttl_num_ = fac->meta_ttl_num_;
+    filter->factory = fac;  // give the Factory pointer to the filer
     return std::unique_ptr<CompactionFilter>(filter);
   } else {
     fac->TrySetDBptr();
@@ -545,7 +584,7 @@ struct DataFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
     auto& fac = dynamic_cast<const ConcreteFactory&>(base);
     LittleEndianDataOutput<NonOwnerFileStream> dio(output);
     if (IsCompactionWorker()) {
-      // do nothing
+      dio << fac.local_fl_cnt;
     }
     else {
       size_t kvs; // meta_ttl_num_
@@ -570,9 +609,9 @@ struct DataFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
   void DeSerialize(FILE* reader, CompactionFilterFactory* base)
   const override {
     auto fac = dynamic_cast<ConcreteFactory*>(base);
+    LittleEndianDataInput<NonOwnerFileStream> dio(reader);
     if (IsCompactionWorker()) {
       fac->m_cp = this->m_cp;
-      LittleEndianDataInput<NonOwnerFileStream> dio(reader);
       dio >> fac->unix_time_;
       dio >> fac->meta_ttl_num_;
       auto kvs = fac->meta_ttl_num_;
@@ -580,7 +619,9 @@ struct DataFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
             job_id, fac->m_type.c_str(), fac->Name(), kvs, rawzip[0]/1e9, rawzip[1]/1e9, (llong)m_cp->smallest_seqno);
     }
     else {
-      // do nothing
+      FilterCounter temp_fl_cnt;
+      dio >> temp_fl_cnt;
+      fac->remote_fl_cnt.add(temp_fl_cnt);
     }
   }
 };
@@ -684,5 +725,337 @@ struct ListsDataKeyDecoder : public UserKeyCoder {
 };
 ROCKSDB_REG_DEFAULT_CONS(ListsDataKeyDecoder, AnyPlugin);
 ROCKSDB_REG_AnyPluginManip("ListsDataKeyDecoder");
+
+template <class FilterFactory>
+struct FilterFactory_Manip : PluginManipFunc<CompactionFilterFactory> {
+  void Update(rocksdb::CompactionFilterFactory *, const json &js,
+              const SidePluginRepo &repo) const final {}
+  std::string ToString(const CompactionFilterFactory &fac,
+                       const json &dump_options,
+                       const SidePluginRepo &) const final {
+    if (auto f = dynamic_cast<const FilterFactory *>(&fac)) {
+      FilterCounter &local_fl_cnt = f->local_fl_cnt;
+      FilterCounter &remote_fl_cnt = f->remote_fl_cnt;
+
+      bool metric = JsonSmartBool(dump_options, "metric", false);
+      if (metric) {
+        std::ostringstream oss;
+        oss << "local:exec_filter_times " << local_fl_cnt.exec_filter_times << '\n';
+        oss << "local:retained:total_num " << local_fl_cnt.all_retained.num << '\n';
+        oss << "local:retained:keys_size " << local_fl_cnt.all_retained.keys_size
+            << '\n';
+        oss << "local:retained:vals_size " << local_fl_cnt.all_retained.vals_size
+            << '\n';
+        oss << "local:retained:total_size "
+            << local_fl_cnt.all_retained.keys_size + local_fl_cnt.all_retained.vals_size
+            << '\n';
+        oss << "local:deleted:not_found:num " << local_fl_cnt.deleted_not_found.num
+            << '\n';
+        oss << "local:deleted:not_found:keys_size "
+            << local_fl_cnt.deleted_not_found.keys_size << '\n';
+        oss << "local:deleted:not_found:vals_size "
+            << local_fl_cnt.deleted_not_found.vals_size << '\n';
+        oss << "local:deleted:not_found:total_size "
+            << local_fl_cnt.deleted_not_found.keys_size +
+                   local_fl_cnt.deleted_not_found.vals_size
+            << '\n';
+        oss << "local:deleted:expired:num " << local_fl_cnt.deleted_expired.num
+            << '\n';
+        oss << "local:deleted:expired:keys_size "
+            << local_fl_cnt.deleted_expired.keys_size << '\n';
+        oss << "local:deleted:expired:vals_size "
+            << local_fl_cnt.deleted_expired.vals_size << '\n';
+        oss << "local:deleted:expired:total_size "
+            << local_fl_cnt.deleted_expired.keys_size +
+                   local_fl_cnt.deleted_expired.vals_size
+            << '\n';
+        oss << "local:deleted:versions_old:num "
+            << local_fl_cnt.deleted_versions_old.num << '\n';
+        oss << "local:deleted:versions_old:keys_size "
+            << local_fl_cnt.deleted_versions_old.keys_size << '\n';
+        oss << "local:deleted:versions_old:vals_size "
+            << local_fl_cnt.deleted_versions_old.vals_size << '\n';
+        oss << "local:deleted:versions_old:total_size "
+            << local_fl_cnt.deleted_versions_old.keys_size +
+                   local_fl_cnt.deleted_versions_old.vals_size
+            << '\n';
+        oss << "local:deleted:total_num "
+            << local_fl_cnt.deleted_not_found.num + local_fl_cnt.deleted_expired.num +
+                   local_fl_cnt.deleted_versions_old.num
+            << '\n';
+        oss << "local:deleted:total_keys_size "
+            << local_fl_cnt.deleted_not_found.keys_size +
+                   local_fl_cnt.deleted_expired.keys_size +
+                   local_fl_cnt.deleted_versions_old.keys_size
+            << '\n';
+        oss << "local:deleted:total_vals_size "
+            << local_fl_cnt.deleted_not_found.vals_size +
+                   local_fl_cnt.deleted_expired.vals_size +
+                   local_fl_cnt.deleted_versions_old.vals_size
+            << '\n';
+        oss << "local:deleted:total_size "
+            << local_fl_cnt.deleted_not_found.keys_size +
+                   local_fl_cnt.deleted_not_found.vals_size +
+                   local_fl_cnt.deleted_expired.keys_size +
+                   local_fl_cnt.deleted_expired.vals_size +
+                   local_fl_cnt.deleted_versions_old.keys_size +
+                   local_fl_cnt.deleted_versions_old.vals_size
+            << '\n';
+
+        oss << "remote:exec_filter_times " << remote_fl_cnt.exec_filter_times
+            << '\n';
+        oss << "remote:retained:total_num " << remote_fl_cnt.all_retained.num
+            << '\n';
+        oss << "remote:retained:keys_size " << remote_fl_cnt.all_retained.keys_size
+            << '\n';
+        oss << "remote:retained:vals_size " << remote_fl_cnt.all_retained.vals_size
+            << '\n';
+        oss << "remote:retained:total_size "
+            << remote_fl_cnt.all_retained.keys_size +
+                   remote_fl_cnt.all_retained.vals_size
+            << '\n';
+        oss << "remote:deleted:not_found:num "
+            << remote_fl_cnt.deleted_not_found.num << '\n';
+        oss << "remote:deleted:not_found:keys_size "
+            << remote_fl_cnt.deleted_not_found.keys_size << '\n';
+        oss << "remote:deleted:not_found:vals_size "
+            << remote_fl_cnt.deleted_not_found.vals_size << '\n';
+        oss << "remote:deleted:not_found:total_size "
+            << remote_fl_cnt.deleted_not_found.keys_size +
+                   remote_fl_cnt.deleted_not_found.vals_size
+            << '\n';
+        oss << "remote:deleted:expired:num " << remote_fl_cnt.deleted_expired.num
+            << '\n';
+        oss << "remote:deleted:expired:keys_size "
+            << remote_fl_cnt.deleted_expired.keys_size << '\n';
+        oss << "remote:deleted:expired:vals_size "
+            << remote_fl_cnt.deleted_expired.vals_size << '\n';
+        oss << "remote:deleted:expired:total_size "
+            << remote_fl_cnt.deleted_expired.keys_size +
+                   remote_fl_cnt.deleted_expired.vals_size
+            << '\n';
+        oss << "remote:deleted:versions_old:num "
+            << remote_fl_cnt.deleted_versions_old.num << '\n';
+        oss << "remote:deleted:versions_old:keys_size "
+            << remote_fl_cnt.deleted_versions_old.keys_size << '\n';
+        oss << "remote:deleted:versions_old:vals_size "
+            << remote_fl_cnt.deleted_versions_old.vals_size << '\n';
+        oss << "remote:deleted:versions_old:total_size "
+            << remote_fl_cnt.deleted_versions_old.keys_size +
+                   remote_fl_cnt.deleted_versions_old.vals_size
+            << '\n';
+        oss << "remote:deleted:total_num "
+            << remote_fl_cnt.deleted_not_found.num + remote_fl_cnt.deleted_expired.num +
+                   remote_fl_cnt.deleted_versions_old.num
+            << '\n';
+        oss << "remote:deleted:total_keys_size "
+            << remote_fl_cnt.deleted_not_found.keys_size +
+                   remote_fl_cnt.deleted_expired.keys_size +
+                   remote_fl_cnt.deleted_versions_old.keys_size
+            << '\n';
+        oss << "remote:deleted:total_vals_size "
+            << remote_fl_cnt.deleted_not_found.vals_size +
+                   remote_fl_cnt.deleted_expired.vals_size +
+                   remote_fl_cnt.deleted_versions_old.vals_size
+            << '\n';
+        oss << "remote:deleted:total_size "
+            << remote_fl_cnt.deleted_not_found.keys_size +
+                   remote_fl_cnt.deleted_not_found.vals_size +
+                   remote_fl_cnt.deleted_expired.keys_size +
+                   remote_fl_cnt.deleted_expired.vals_size +
+                   remote_fl_cnt.deleted_versions_old.keys_size +
+                   remote_fl_cnt.deleted_versions_old.vals_size
+            << '\n';
+        return oss.str();
+      }
+
+      json js;
+
+      js["local"]["exec_filter_times"] = local_fl_cnt.exec_filter_times;
+      js["local"]["retained"]["total_num"] = local_fl_cnt.all_retained.num;
+      js["local"]["deleted"]["not_found"]["num"] = local_fl_cnt.deleted_not_found.num;
+      js["local"]["deleted"]["expired"]["num"] = local_fl_cnt.deleted_expired.num;
+      js["local"]["deleted"]["versions_old"]["num"] =
+          local_fl_cnt.deleted_versions_old.num;
+      js["local"]["deleted"]["total_num"] = local_fl_cnt.deleted_not_found.num +
+                                            local_fl_cnt.deleted_expired.num +
+                                            local_fl_cnt.deleted_versions_old.num;
+
+      js["remote"]["exec_filter_times"] = remote_fl_cnt.exec_filter_times;
+      js["remote"]["retained"]["total_num"] = remote_fl_cnt.all_retained.num;
+      js["remote"]["deleted"]["not_found"]["num"] = remote_fl_cnt.deleted_not_found.num;
+      js["remote"]["deleted"]["expired"]["num"] = remote_fl_cnt.deleted_expired.num;
+      js["remote"]["deleted"]["versions_old"]["num"] =
+          remote_fl_cnt.deleted_versions_old.num;
+      js["remote"]["deleted"]["total_num"] = remote_fl_cnt.deleted_not_found.num +
+                                            remote_fl_cnt.deleted_expired.num +
+                                            remote_fl_cnt.deleted_versions_old.num;
+
+      if (JsonSmartBool(dump_options, "html", true)) {
+        js["local"]["retained"]["keys_size"] =
+            SizeToString(local_fl_cnt.all_retained.keys_size);
+        js["local"]["retained"]["vals_size"] =
+            SizeToString(local_fl_cnt.all_retained.vals_size);
+        js["local"]["retained"]["total_size"] =
+            SizeToString(local_fl_cnt.all_retained.keys_size + local_fl_cnt.all_retained.vals_size);
+        js["local"]["deleted"]["not_found"]["keys_size"] =
+            SizeToString(local_fl_cnt.deleted_not_found.keys_size);
+        js["local"]["deleted"]["not_found"]["vals_size"] =
+            SizeToString(local_fl_cnt.deleted_not_found.vals_size);
+        js["local"]["deleted"]["not_found"]["total_size"] = SizeToString(
+            local_fl_cnt.deleted_not_found.keys_size + local_fl_cnt.deleted_not_found.vals_size);
+        js["local"]["deleted"]["expired"]["keys_size"] =
+            SizeToString(local_fl_cnt.deleted_expired.keys_size);
+        js["local"]["deleted"]["expired"]["vals_size"] =
+            SizeToString(local_fl_cnt.deleted_expired.vals_size);
+        js["local"]["deleted"]["expired"]["total_size"] = SizeToString(
+            local_fl_cnt.deleted_expired.keys_size + local_fl_cnt.deleted_expired.vals_size);
+        js["local"]["deleted"]["versions_old"]["keys_size"] =
+            SizeToString(local_fl_cnt.deleted_versions_old.keys_size);
+        js["local"]["deleted"]["versions_old"]["vals_size"] =
+            SizeToString(local_fl_cnt.deleted_versions_old.vals_size);
+        js["local"]["deleted"]["versions_old"]["total_size"] =
+            SizeToString(local_fl_cnt.deleted_versions_old.keys_size +
+                         local_fl_cnt.deleted_versions_old.vals_size);
+        js["local"]["deleted"]["total_keys_size"] = SizeToString(
+            local_fl_cnt.deleted_not_found.keys_size + local_fl_cnt.deleted_expired.keys_size +
+            local_fl_cnt.deleted_versions_old.keys_size);
+        js["local"]["deleted"]["total_vals_size"] = SizeToString(
+            local_fl_cnt.deleted_not_found.vals_size + local_fl_cnt.deleted_expired.vals_size +
+            local_fl_cnt.deleted_versions_old.vals_size);
+        js["local"]["deleted"]["total_size"] = SizeToString(
+            local_fl_cnt.deleted_not_found.keys_size + local_fl_cnt.deleted_not_found.vals_size +
+            local_fl_cnt.deleted_expired.keys_size + local_fl_cnt.deleted_expired.vals_size +
+            local_fl_cnt.deleted_versions_old.keys_size +
+            local_fl_cnt.deleted_versions_old.vals_size);
+
+        js["remote"]["retained"]["keys_size"] =
+            SizeToString(remote_fl_cnt.all_retained.keys_size);
+        js["remote"]["retained"]["vals_size"] =
+            SizeToString(remote_fl_cnt.all_retained.vals_size);
+        js["remote"]["retained"]["total_size"] =
+            SizeToString(remote_fl_cnt.all_retained.keys_size + remote_fl_cnt.all_retained.vals_size);
+        js["remote"]["deleted"]["not_found"]["keys_size"] =
+            SizeToString(remote_fl_cnt.deleted_not_found.keys_size);
+        js["remote"]["deleted"]["not_found"]["vals_size"] =
+            SizeToString(remote_fl_cnt.deleted_not_found.vals_size);
+        js["remote"]["deleted"]["not_found"]["total_size"] = SizeToString(
+            remote_fl_cnt.deleted_not_found.keys_size + remote_fl_cnt.deleted_not_found.vals_size);
+        js["remote"]["deleted"]["expired"]["keys_size"] =
+            SizeToString(remote_fl_cnt.deleted_expired.keys_size);
+        js["remote"]["deleted"]["expired"]["vals_size"] =
+            SizeToString(remote_fl_cnt.deleted_expired.vals_size);
+        js["remote"]["deleted"]["expired"]["total_size"] = SizeToString(
+            remote_fl_cnt.deleted_expired.keys_size + remote_fl_cnt.deleted_expired.vals_size);
+        js["remote"]["deleted"]["versions_old"]["keys_size"] =
+            SizeToString(remote_fl_cnt.deleted_versions_old.keys_size);
+        js["remote"]["deleted"]["versions_old"]["vals_size"] =
+            SizeToString(remote_fl_cnt.deleted_versions_old.vals_size);
+        js["remote"]["deleted"]["versions_old"]["total_size"] =
+            SizeToString(remote_fl_cnt.deleted_versions_old.keys_size +
+                         remote_fl_cnt.deleted_versions_old.vals_size);
+        js["remote"]["deleted"]["total_keys_size"] = SizeToString(
+            remote_fl_cnt.deleted_not_found.keys_size + remote_fl_cnt.deleted_expired.keys_size +
+            remote_fl_cnt.deleted_versions_old.keys_size);
+        js["remote"]["deleted"]["total_vals_size"] = SizeToString(
+            remote_fl_cnt.deleted_not_found.vals_size + remote_fl_cnt.deleted_expired.vals_size +
+            remote_fl_cnt.deleted_versions_old.vals_size);
+        js["remote"]["deleted"]["total_size"] = SizeToString(
+            remote_fl_cnt.deleted_not_found.keys_size + remote_fl_cnt.deleted_not_found.vals_size +
+            remote_fl_cnt.deleted_expired.keys_size + remote_fl_cnt.deleted_expired.vals_size +
+            remote_fl_cnt.deleted_versions_old.keys_size +
+            remote_fl_cnt.deleted_versions_old.vals_size);
+      } else {
+        js["local"]["retained"]["keys_size"] = local_fl_cnt.all_retained.keys_size;
+        js["local"]["retained"]["vals_size"] = local_fl_cnt.all_retained.vals_size;
+        js["local"]["retained"]["total_size"] =
+            local_fl_cnt.all_retained.keys_size + local_fl_cnt.all_retained.vals_size;
+        js["local"]["deleted"]["not_found"]["keys_size"] =
+            local_fl_cnt.deleted_not_found.keys_size;
+        js["local"]["deleted"]["not_found"]["vals_size"] =
+            local_fl_cnt.deleted_not_found.vals_size;
+        js["local"]["deleted"]["not_found"]["total_size"] =
+            local_fl_cnt.deleted_not_found.keys_size + local_fl_cnt.deleted_not_found.vals_size;
+        js["local"]["deleted"]["expired"]["keys_size"] =
+            local_fl_cnt.deleted_expired.keys_size;
+        js["local"]["deleted"]["expired"]["vals_size"] =
+            local_fl_cnt.deleted_expired.vals_size;
+        js["local"]["deleted"]["expired"]["total_size"] =
+            local_fl_cnt.deleted_expired.keys_size + local_fl_cnt.deleted_expired.vals_size;
+        js["local"]["deleted"]["versions_old"]["keys_size"] =
+            local_fl_cnt.deleted_versions_old.keys_size;
+        js["local"]["deleted"]["versions_old"]["vals_size"] =
+            local_fl_cnt.deleted_versions_old.vals_size;
+        js["local"]["deleted"]["versions_old"]["total_size"] =
+            local_fl_cnt.deleted_versions_old.keys_size +
+            local_fl_cnt.deleted_versions_old.vals_size;
+        js["local"]["deleted"]["total_keys_size"] =
+            local_fl_cnt.deleted_not_found.keys_size + local_fl_cnt.deleted_expired.keys_size +
+            local_fl_cnt.deleted_versions_old.keys_size;
+        js["local"]["deleted"]["total_vals_size"] =
+            local_fl_cnt.deleted_not_found.vals_size + local_fl_cnt.deleted_expired.vals_size +
+            local_fl_cnt.deleted_versions_old.vals_size;
+        js["local"]["deleted"]["total_size"] =
+            local_fl_cnt.deleted_not_found.keys_size + local_fl_cnt.deleted_not_found.vals_size +
+            local_fl_cnt.deleted_expired.keys_size + local_fl_cnt.deleted_expired.vals_size +
+            local_fl_cnt.deleted_versions_old.keys_size +
+            local_fl_cnt.deleted_versions_old.vals_size;
+
+        js["remote"]["retained"]["keys_size"] = remote_fl_cnt.all_retained.keys_size;
+        js["remote"]["retained"]["vals_size"] = remote_fl_cnt.all_retained.vals_size;
+        js["remote"]["retained"]["total_size"] =
+            remote_fl_cnt.all_retained.keys_size + remote_fl_cnt.all_retained.vals_size;
+        js["remote"]["deleted"]["not_found"]["keys_size"] =
+            remote_fl_cnt.deleted_not_found.keys_size;
+        js["remote"]["deleted"]["not_found"]["vals_size"] =
+            remote_fl_cnt.deleted_not_found.vals_size;
+        js["remote"]["deleted"]["not_found"]["total_size"] =
+            remote_fl_cnt.deleted_not_found.keys_size + remote_fl_cnt.deleted_not_found.vals_size;
+        js["remote"]["deleted"]["expired"]["keys_size"] =
+            remote_fl_cnt.deleted_expired.keys_size;
+        js["remote"]["deleted"]["expired"]["vals_size"] =
+            remote_fl_cnt.deleted_expired.vals_size;
+        js["remote"]["deleted"]["expired"]["total_size"] =
+            remote_fl_cnt.deleted_expired.keys_size + remote_fl_cnt.deleted_expired.vals_size;
+        js["remote"]["deleted"]["versions_old"]["keys_size"] =
+            remote_fl_cnt.deleted_versions_old.keys_size;
+        js["remote"]["deleted"]["versions_old"]["vals_size"] =
+            remote_fl_cnt.deleted_versions_old.vals_size;
+        js["remote"]["deleted"]["versions_old"]["total_size"] =
+            remote_fl_cnt.deleted_versions_old.keys_size +
+            remote_fl_cnt.deleted_versions_old.vals_size;
+        js["remote"]["deleted"]["total_keys_size"] =
+            remote_fl_cnt.deleted_not_found.keys_size + remote_fl_cnt.deleted_expired.keys_size +
+            remote_fl_cnt.deleted_versions_old.keys_size;
+        js["remote"]["deleted"]["total_vals_size"] =
+            remote_fl_cnt.deleted_not_found.vals_size + remote_fl_cnt.deleted_expired.vals_size +
+            remote_fl_cnt.deleted_versions_old.vals_size;
+        js["remote"]["deleted"]["total_size"] =
+            remote_fl_cnt.deleted_not_found.keys_size + remote_fl_cnt.deleted_not_found.vals_size +
+            remote_fl_cnt.deleted_expired.keys_size + remote_fl_cnt.deleted_expired.vals_size +
+            remote_fl_cnt.deleted_versions_old.keys_size +
+            remote_fl_cnt.deleted_versions_old.vals_size;
+      }
+
+      return JsonToString(js, dump_options);
+    }
+    THROW_InvalidArgument("Unknow CompactionFilterFactory");
+  }
+};
+
+typedef FilterFactory_Manip<BaseMetaFilterFactory> BaseMetaFilterFactory_Manip;
+typedef FilterFactory_Manip<BaseDataFilterFactory> BaseDataFilterFactory_Manip;
+typedef FilterFactory_Manip<ListsMetaFilterFactory> ListsMetaFilterFactory_Manip;
+typedef FilterFactory_Manip<ListsDataFilterFactory> ListsDataFilterFactory_Manip;
+typedef FilterFactory_Manip<ZSetsScoreFilterFactory> ZSetsScoreFilterFactory_Manip;
+typedef FilterFactory_Manip<StringsFilterFactory> StringsFilterFactory_Manip;
+
+ROCKSDB_REG_PluginManip("BaseMetaFilterFactory", BaseMetaFilterFactory_Manip);
+ROCKSDB_REG_PluginManip("BaseDataFilterFactory", BaseDataFilterFactory_Manip);
+ROCKSDB_REG_PluginManip("ListsMetaFilterFactory", ListsMetaFilterFactory_Manip);
+ROCKSDB_REG_PluginManip("ListsDataFilterFactory", ListsDataFilterFactory_Manip);
+ROCKSDB_REG_PluginManip("ZSetsScoreFilterFactory", ZSetsScoreFilterFactory_Manip);
+ROCKSDB_REG_PluginManip("StringsFilterFactory", StringsFilterFactory_Manip);
+
 
 } // namespace blackwidow
