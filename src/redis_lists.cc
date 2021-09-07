@@ -11,6 +11,19 @@
 #include "src/lists_filter.h"
 #include "src/scope_record_lock.h"
 #include "src/scope_snapshot.h"
+#include "include/db_read_write_histogram.h"
+
+extern db_rw_histogram::DbReadWriteHistogram* g_db_read_write_histogram;
+
+//只有插入新的field才执行计算
+static void list_add_histogram(size_t field_size, size_t value_size) {
+  //g_db_read_write_histogram->Add_Histogram_Metric(db_rw_histogram::List, db_rw_histogram::Add, db_rw_histogram::Field, field_size);
+  g_db_read_write_histogram->Add_Histogram_Metric(db_rw_histogram::List, db_rw_histogram::Add, db_rw_histogram::Value, value_size);
+};
+static void list_del_histogram(size_t field_size, size_t value_size) {
+  //g_db_read_write_histogram->Add_Histogram_Metric(db_rw_histogram::List, db_rw_histogram::Del, db_rw_histogram::Field, field_size);
+  g_db_read_write_histogram->Add_Histogram_Metric(db_rw_histogram::List, db_rw_histogram::Del, db_rw_histogram::Value, value_size);
+};
 
 namespace blackwidow {
 
@@ -195,6 +208,7 @@ Status RedisLists::PKPatternMatchDel(const std::string& pattern,
       && StringMatch(pattern.data(), pattern.size(), key.data(), key.size(), 0)) {
       parsed_lists_meta_value.InitialMetaValue();
       batch.Put(handles_[0], key, meta_value);
+      list_del_histogram(0, meta_value.size());
     }
     if (static_cast<size_t>(batch.Count()) >= BATCH_DELETE_LIMIT) {
       s = db_->Write(default_write_options_, &batch);
@@ -359,6 +373,9 @@ Status RedisLists::LInsert(const Slice& key,
         ListsDataKey lists_target_key(key, version, target_index);
         batch.Put(handles_[1], lists_target_key.Encode(), value);
         *ret = parsed_lists_meta_value.count();
+
+        list_add_histogram(key.size(), value.size());
+
         return db_->Write(default_write_options_, &batch);
       }
     }
@@ -410,6 +427,7 @@ Status RedisLists::LPop(const Slice& key, std::string* element) {
         parsed_lists_meta_value.ModifyCount(-1);
         parsed_lists_meta_value.ModifyLeftIndex(-1);
         batch.Put(handles_[0], key, meta_value);
+        list_del_histogram(0, meta_value.size());
         s = db_->Write(default_write_options_, &batch);
         UpdateSpecificKeyStatistics(key.ToString(), statistic);
         return s;
@@ -446,6 +464,7 @@ Status RedisLists::LPush(const Slice& key,
       parsed_lists_meta_value.ModifyCount(1);
       ListsDataKey lists_data_key(key, version, index);
       batch.Put(handles_[1], lists_data_key.Encode(), value);
+      list_add_histogram(0, value.size());
     }
     batch.Put(handles_[0], key, meta_value);
     *ret = parsed_lists_meta_value.count();
@@ -459,6 +478,7 @@ Status RedisLists::LPush(const Slice& key,
       lists_meta_value.ModifyLeftIndex(1);
       ListsDataKey lists_data_key(key, version, index);
       batch.Put(handles_[1], lists_data_key.Encode(), value);
+      list_add_histogram(0, value.size());
     }
     batch.Put(handles_[0], key, lists_meta_value.Encode());
     *ret = lists_meta_value.right_index() - lists_meta_value.left_index() - 1;
@@ -489,6 +509,7 @@ Status RedisLists::LPushx(const Slice& key, const Slice& value, uint64_t* len) {
       ListsDataKey lists_data_key(key, version, index);
       batch.Put(handles_[0], key, meta_value);
       batch.Put(handles_[1], lists_data_key.Encode(), value);
+      list_add_histogram(0, value.size());
       *len = parsed_lists_meta_value.count();
       return db_->Write(default_write_options_, &batch);
     }
@@ -671,6 +692,7 @@ Status RedisLists::LRem(const Slice& key, int64_t count,
         for (const auto& idx : delete_index) {
           ListsDataKey lists_data_key(key, version, idx);
           batch.Delete(handles_[1], lists_data_key.Encode());
+          list_del_histogram(0, lists_data_key.Encode().size());
         }
         *ret = target_index.size();
         return db_->Write(default_write_options_, &batch);
@@ -804,6 +826,7 @@ Status RedisLists::RPop(const Slice& key, std::string* element) {
           handles_[1], lists_data_key.Encode(), element);
       if (s.ok()) {
         batch.Delete(handles_[1], lists_data_key.Encode());
+        list_del_histogram(0, lists_data_key.Encode().size());
         statistic++;
         parsed_lists_meta_value.ModifyCount(-1);
         parsed_lists_meta_value.ModifyRightIndex(-1);
@@ -963,6 +986,7 @@ Status RedisLists::RPush(const Slice& key,
       parsed_lists_meta_value.ModifyCount(1);
       ListsDataKey lists_data_key(key, version, index);
       batch.Put(handles_[1], lists_data_key.Encode(), value);
+      list_add_histogram(0, value.size());
     }
     batch.Put(handles_[0], key, meta_value);
     *ret = parsed_lists_meta_value.count();
@@ -976,6 +1000,7 @@ Status RedisLists::RPush(const Slice& key,
       lists_meta_value.ModifyRightIndex(1);
       ListsDataKey lists_data_key(key, version, index);
       batch.Put(handles_[1], lists_data_key.Encode(), value);
+      list_add_histogram(0, value.size());
     }
     batch.Put(handles_[0], key, lists_meta_value.Encode());
     *ret = lists_meta_value.right_index() - lists_meta_value.left_index() - 1;
@@ -1006,6 +1031,7 @@ Status RedisLists::RPushx(const Slice& key, const Slice& value, uint64_t* len) {
       ListsDataKey lists_data_key(key, version, index);
       batch.Put(handles_[0], key, meta_value);
       batch.Put(handles_[1], lists_data_key.Encode(), value);
+      list_add_histogram(0, value.size());
       *len = parsed_lists_meta_value.count();
       return db_->Write(default_write_options_, &batch);
     }
@@ -1159,6 +1185,7 @@ Status RedisLists::Expire(const Slice& key, int32_t ttl) {
     } else {
       parsed_lists_meta_value.InitialMetaValue();
       s = db_->Put(default_write_options_, handles_[0], key, meta_value);
+      list_del_histogram(0, meta_value.size());
     }
   }
   return s;
@@ -1178,6 +1205,7 @@ Status RedisLists::Del(const Slice& key) {
       uint32_t statistic = parsed_lists_meta_value.count();
       parsed_lists_meta_value.InitialMetaValue();
       s = db_->Put(default_write_options_, handles_[0], key, meta_value);
+      list_del_histogram(key.size(), meta_value.size());
       UpdateSpecificKeyStatistics(key.ToString(), statistic);
     }
   }
