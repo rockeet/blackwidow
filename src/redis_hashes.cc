@@ -24,6 +24,9 @@ static void hash_del_histogram(size_t field_size, size_t value_size) {
   g_db_read_write_histogram->Add_Histogram_Metric(db_rw_histogram::Hash, db_rw_histogram::Del, db_rw_histogram::Field, field_size);
   g_db_read_write_histogram->Add_Histogram_Metric(db_rw_histogram::Hash, db_rw_histogram::Del, db_rw_histogram::Value, value_size);
 };
+static void hash_key_histogram(db_rw_histogram::process_type add_del, size_t size) {
+  g_db_read_write_histogram->Add_Histogram_Metric(db_rw_histogram::Hash, add_del, db_rw_histogram::Key, size);
+}
 static auto data_suffix_length = blackwidow::ParsedBaseMetaValue::kBaseMetaValueSuffixLength;
 
 namespace blackwidow {
@@ -203,6 +206,7 @@ Status RedisHashes::PKPatternMatchDel(const std::string& pattern,
       && StringMatch(pattern.data(), pattern.size(), key.data(), key.size(), 0)) {
       parsed_hashes_meta_value.InitialMetaValue();
       batch.Put(handles_[0], key, meta_value);
+      hash_key_histogram(db_rw_histogram::Del, key.size());
       hash_del_histogram(key.size(), parsed_hashes_meta_value.user_value().size());
     }
     if (static_cast<size_t>(batch.Count()) >= BATCH_DELETE_LIMIT) {
@@ -279,6 +283,7 @@ Status RedisHashes::HDel(const Slice& key,
       }
       *ret = del_cnt;
       parsed_hashes_meta_value.ModifyCount(-del_cnt);
+      if (parsed_hashes_meta_value.count() == 0) hash_key_histogram(db_rw_histogram::Del, key.size());
       batch.Put(handles_[0], key, meta_value);
     }
   } else if (s.IsNotFound()) {
@@ -423,6 +428,7 @@ Status RedisHashes::HIncrby(const Slice& key, const Slice& field, int64_t value,
     Int64ToStr(buf, 32, value);
     batch.Put(handles_[1], hashes_data_key.Encode(), buf);
     *ret = value;
+    hash_key_histogram(db_rw_histogram::Add, key.size());
     hash_add_histogram(field.size(), std::to_string(value).size());
   } else {
     return s;
@@ -499,6 +505,7 @@ Status RedisHashes::HIncrbyfloat(const Slice& key, const Slice& field,
     HashesDataKey hashes_data_key(key, version, field);
     LongDoubleToStr(long_double_by, new_value);
     batch.Put(handles_[1], hashes_data_key.Encode(), *new_value);
+    hash_key_histogram(db_rw_histogram::Add, key.size());
     hash_add_histogram(field.size(), new_value->size());
   } else {
     return s;
@@ -1259,7 +1266,7 @@ Status RedisHashes::Expire(const Slice& key, int32_t ttl) {
       s = db_->Put(default_write_options_, handles_[0], key, meta_value);
     } else {
       parsed_hashes_meta_value.InitialMetaValue();
-      hash_del_histogram(key.size(), meta_value.size() - data_suffix_length);
+      hash_key_histogram(db_rw_histogram::Del, key.size());
       s = db_->Put(default_write_options_, handles_[0], key, meta_value);
     }
   }
@@ -1280,6 +1287,7 @@ Status RedisHashes::Del(const Slice& key) {
       uint32_t statistic = parsed_hashes_meta_value.count();
       parsed_hashes_meta_value.InitialMetaValue();
       s = db_->Put(default_write_options_, handles_[0], key, meta_value);
+      hash_key_histogram(db_rw_histogram::Del, key.size());
       hash_del_histogram(key.size(), meta_value.size() - data_suffix_length);
       UpdateSpecificKeyStatistics(key.ToString(), statistic);
     }

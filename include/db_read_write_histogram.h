@@ -12,6 +12,7 @@
 namespace db_rw_histogram{
 
 enum data_type {
+  String,
   Hash,
   List,
   Set,
@@ -26,6 +27,7 @@ enum process_type {
 };
 
 enum field_value {
+  Key,
   Field,
   Value,
   FieldValueMax,
@@ -45,6 +47,7 @@ public:
   ~DbReadWriteHistogram();
   void Add_Histogram_Metric(const data_type type, process_type step, field_value filed, long value);
   std::string get_metric();
+  void reset();
 
 private:
   int fd;

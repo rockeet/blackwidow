@@ -21,7 +21,14 @@ namespace db_rw_histogram {
 
 static const rocksdb::HistogramBucketMapper bucketMapper;
 
-
+void DbReadWriteHistogram::reset() {
+  data->check_sum = 0;
+  for (int i = 0; i < DBTypeMax; i++) {
+    for (int j = 0; j < ProcessTypeMax; j++) {
+      for (int k = 0; k < FieldValueMax; k++) { data->HistogramTable[i][j][k].Clear(); }
+    }
+  }
+}
 // 返回值校验
 // fstat 检查长度
 // checksum 校验文件
@@ -38,8 +45,10 @@ DbReadWriteHistogram::DbReadWriteHistogram(const std::string &path) {
   struct stat buf;
   int result = fstat(fd, &buf);
   if (result != 0) LOG(FATAL) << "DbReadWriteHistogram get file size error:" << errno;
-  if (buf.st_size != sizeof(*data)) LOG(FATAL) << "DbReadWriteHistogram file size error";
-  
+  if (buf.st_size != sizeof(*data)) {
+    LOG(FATAL) << "DbReadWriteHistogram file:"<< path << " size error current:" << buf.st_size << "!=" << sizeof(*data);
+  }
+
   auto addr = mmap(NULL, sizeof(*data), PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
   if (addr == MAP_FAILED) LOG(FATAL) << "DbReadWriteHistogram mmap failed";
   data = (HistogramData*)addr;
@@ -48,14 +57,7 @@ DbReadWriteHistogram::DbReadWriteHistogram(const std::string &path) {
     LOG(ERROR) << "DbReadWriteHistogram check sum failed";
   }
 
-  if (!exist) {
-    data->check_sum = 0;
-    for (int i = 0; i < DBTypeMax; i++) {
-      for (int j = 0; j < ProcessTypeMax; j++) {
-        for (int k = 0; k < FieldValueMax; k++) { data->HistogramTable[i][j][k].Clear(); }
-      }
-    }
-  }
+  if (!exist) reset();
 }
 
 DbReadWriteHistogram::~DbReadWriteHistogram() {

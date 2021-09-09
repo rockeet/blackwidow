@@ -15,6 +15,19 @@
 #include "src/strings_filter.h"
 #include "src/scope_record_lock.h"
 #include "src/scope_snapshot.h"
+#include "include/db_read_write_histogram.h"
+
+extern db_rw_histogram::DbReadWriteHistogram* g_db_read_write_histogram;
+
+//只有插入新的field才执行计算
+static void string_add_histogram(size_t key_size, size_t value_size) {
+  g_db_read_write_histogram->Add_Histogram_Metric(db_rw_histogram::String, db_rw_histogram::Add, db_rw_histogram::Key, key_size);
+  g_db_read_write_histogram->Add_Histogram_Metric(db_rw_histogram::String, db_rw_histogram::Add, db_rw_histogram::Value, value_size);
+};
+static void string_del_histogram(size_t key_size, size_t value_size) {
+  g_db_read_write_histogram->Add_Histogram_Metric(db_rw_histogram::String, db_rw_histogram::Del, db_rw_histogram::Key, key_size);
+  g_db_read_write_histogram->Add_Histogram_Metric(db_rw_histogram::String, db_rw_histogram::Del, db_rw_histogram::Value, value_size);
+};
 
 namespace blackwidow {
 
@@ -144,6 +157,7 @@ Status RedisStrings::PKPatternMatchDel(const std::string& pattern,
     ParsedStringsValue parsed_strings_value(&value);
     if (!parsed_strings_value.IsStale()
       && StringMatch(pattern.data(), pattern.size(), key.data(), key.size(), 0)) {
+      string_del_histogram(key.size(), parsed_strings_value.user_value().size());
       batch.Delete(key);
     }
     // In order to be more efficient, we use batch deletion here
@@ -182,6 +196,7 @@ Status RedisStrings::Append(const Slice& key, const Slice& value,
     if (parsed_strings_value.IsStale()) {
       *ret = value.size();
       StringsValue strings_value(value);
+      string_add_histogram(key.size(), value.size());
       return db_->Put(default_write_options_, key, strings_value.Encode());
     } else {
       int32_t timestamp = parsed_strings_value.timestamp();
@@ -190,11 +205,14 @@ Status RedisStrings::Append(const Slice& key, const Slice& value,
       StringsValue strings_value(new_value);
       strings_value.set_timestamp(timestamp);
       *ret = new_value.size();
+      string_del_histogram(key.size(), old_user_value.size());
+      string_add_histogram(key.size(), new_value.size());
       return db_->Put(default_write_options_, key, strings_value.Encode());
     }
   } else if (s.IsNotFound()) {
     *ret = value.size();
     StringsValue strings_value(value);
+    string_add_histogram(key.size(), value.size());
     return db_->Put(default_write_options_, key, strings_value.Encode());
   }
   return s;
@@ -363,6 +381,7 @@ Status RedisStrings::Decrby(const Slice& key, int64_t value, int64_t* ret) {
       *ret = -value;
       new_value = std::to_string(*ret);
       StringsValue strings_value(new_value);
+      string_add_histogram(key.size(), new_value.size());
       return db_->Put(default_write_options_, key, strings_value.Encode());
     } else {
       int32_t timestamp = parsed_strings_value.timestamp();
@@ -380,12 +399,15 @@ Status RedisStrings::Decrby(const Slice& key, int64_t value, int64_t* ret) {
       new_value = std::to_string(*ret);
       StringsValue strings_value(new_value);
       strings_value.set_timestamp(timestamp);
+      string_del_histogram(key.size(), old_user_value.size());
+      string_add_histogram(key.size(), new_value.size());
       return db_->Put(default_write_options_, key, strings_value.Encode());
     }
   } else if (s.IsNotFound()) {
     *ret = -value;
     new_value = std::to_string(*ret);
     StringsValue strings_value(new_value);
+    string_add_histogram(key.size(), new_value.size());
     return db_->Put(default_write_options_, key, strings_value.Encode());
   } else {
     return s;
@@ -481,12 +503,14 @@ Status RedisStrings::GetSet(const Slice& key, const Slice& value,
     if (parsed_strings_value.IsStale()) {
       *old_value = "";
     } else {
+      string_del_histogram(key.size(), old_value->size());
       parsed_strings_value.StripSuffix();
     }
   } else if (!s.IsNotFound()) {
     return s;
   }
   StringsValue strings_value(value);
+  string_add_histogram(key.size(), value.size());
   return db_->Put(default_write_options_, key, strings_value.Encode());
 }
 
@@ -502,6 +526,7 @@ Status RedisStrings::Incrby(const Slice& key, int64_t value, int64_t* ret) {
       char buf[32];
       Int64ToStr(buf, 32, value);
       StringsValue strings_value(buf);
+      string_add_histogram(key.size(),  parsed_strings_value.value().size());
       return db_->Put(default_write_options_, key, strings_value.Encode());
     } else {
       int32_t timestamp = parsed_strings_value.timestamp();
@@ -519,6 +544,8 @@ Status RedisStrings::Incrby(const Slice& key, int64_t value, int64_t* ret) {
       new_value = std::to_string(*ret);
       StringsValue strings_value(new_value);
       strings_value.set_timestamp(timestamp);
+      string_del_histogram(key.size(), old_user_value.size());
+      string_add_histogram(key.size(), new_value.size());
       return db_->Put(default_write_options_, key, strings_value.Encode());
     }
   } else if (s.IsNotFound()) {
@@ -526,6 +553,7 @@ Status RedisStrings::Incrby(const Slice& key, int64_t value, int64_t* ret) {
     char buf[32];
     Int64ToStr(buf, 32, value);
     StringsValue strings_value(buf);
+    string_add_histogram(key.size(), std::string(buf).size());
     return db_->Put(default_write_options_, key, strings_value.Encode());
   } else {
     return s;
@@ -547,6 +575,7 @@ Status RedisStrings::Incrbyfloat(const Slice& key, const Slice& value,
       LongDoubleToStr(long_double_by, &new_value);
       *ret = new_value;
       StringsValue strings_value(new_value);
+      string_add_histogram(key.size(), new_value.size());
       return db_->Put(default_write_options_, key, strings_value.Encode());
     } else {
       int32_t timestamp = parsed_strings_value.timestamp();
@@ -563,12 +592,15 @@ Status RedisStrings::Incrbyfloat(const Slice& key, const Slice& value,
       *ret = new_value;
       StringsValue strings_value(new_value);
       strings_value.set_timestamp(timestamp);
+      string_del_histogram(key.size(), old_value.size());
+      string_add_histogram(key.size(), new_value.size());
       return db_->Put(default_write_options_, key, strings_value.Encode());
     }
   } else if (s.IsNotFound()) {
     LongDoubleToStr(long_double_by, &new_value);
     *ret = new_value;
     StringsValue strings_value(new_value);
+    string_add_histogram(key.size(), new_value.size());
     return db_->Put(default_write_options_, key, strings_value.Encode());
   } else {
     return s;
@@ -616,6 +648,7 @@ Status RedisStrings::MSet(const std::vector<KeyValue>& kvs) {
   for (const auto& kv : kvs) {
     StringsValue strings_value(kv.value);
     batch.Put(kv.key, strings_value.Encode());
+    string_add_histogram(kv.key.size(), kv.value.size());
   }
   return db_->Write(default_write_options_, &batch);
 }
@@ -649,6 +682,7 @@ Status RedisStrings::Set(const Slice& key,
                          const Slice& value) {
   StringsValue strings_value(value);
   ScopeRecordLock l(lock_mgr_, key);
+  string_add_histogram(key.size(), value.size());
   return db_->Put(default_write_options_, key, strings_value.Encode());
 }
 
@@ -678,6 +712,8 @@ Status RedisStrings::Setxx(const Slice& key,
     if (ttl > 0) {
       strings_value.SetRelativeTimestamp(ttl);
     }
+    string_del_histogram(key.size(), ParsedStringsValue(old_value).user_value().size());
+    string_add_histogram(key.size(), value.size());
     return db_->Put(default_write_options_, key, strings_value.Encode());
   }
 }
@@ -697,6 +733,7 @@ Status RedisStrings::SetBit(const Slice& key, int64_t offset,
       ParsedStringsValue parsed_strings_value(&meta_value);
       if (!parsed_strings_value.IsStale()) {
         data_value = parsed_strings_value.value().ToString();
+        string_del_histogram(key.size(), data_value.size());
       }
     }
     size_t byte = offset >> 3;
@@ -722,6 +759,7 @@ Status RedisStrings::SetBit(const Slice& key, int64_t offset,
       data_value.append(1, byte_val);
     }
     StringsValue strings_value(data_value);
+    string_add_histogram(key.size(), data_value.size());
     return  db_->Put(default_write_options_, key, strings_value.Encode());
   } else {
     return s;
@@ -735,6 +773,7 @@ Status RedisStrings::Setex(const Slice& key, const Slice& value, int32_t ttl) {
   StringsValue strings_value(value);
   strings_value.SetRelativeTimestamp(ttl);
   ScopeRecordLock l(lock_mgr_, key);
+  string_add_histogram(key.size(), value.size());
   return db_->Put(default_write_options_, key, strings_value.Encode());
 }
 
@@ -753,6 +792,7 @@ Status RedisStrings::Setnx(const Slice& key,
       if (ttl > 0) {
         strings_value.SetRelativeTimestamp(ttl);
       }
+      string_add_histogram(key.size(), value.size());
       s = db_->Put(default_write_options_, key, strings_value.Encode());
       if (s.ok()) {
         *ret = 1;
@@ -763,6 +803,7 @@ Status RedisStrings::Setnx(const Slice& key,
     if (ttl > 0) {
       strings_value.SetRelativeTimestamp(ttl);
     }
+    string_add_histogram(key.size(), value.size());
     s = db_->Put(default_write_options_, key, strings_value.Encode());
     if (s.ok()) {
       *ret = 1;
@@ -790,6 +831,8 @@ Status RedisStrings::Setvx(const Slice& key,
         if (ttl > 0) {
           strings_value.SetRelativeTimestamp(ttl);
         }
+        string_del_histogram(key.size(), parsed_strings_value.user_value().size());
+        string_add_histogram(key.size(), new_value.size());
         s = db_->Put(default_write_options_, key, strings_value.Encode());
         if (!s.ok()) {
           return s;
@@ -820,6 +863,7 @@ Status RedisStrings::Delvx(const Slice& key, const Slice& value, int32_t* ret) {
     } else {
       if (!value.compare(parsed_strings_value.value())) {
         *ret = 1;
+        string_del_histogram(key.size(), value.size());
         return db_->Delete(default_write_options_, key);
       } else {
         *ret = -1;
@@ -849,6 +893,7 @@ Status RedisStrings::Setrange(const Slice& key, int64_t start_offset,
       new_value = tmp.append(value.data());
       *ret = new_value.length();
     } else {
+      string_del_histogram(key.size(), parsed_strings_value.user_value().size());
       if (static_cast<size_t>(start_offset) > old_value.length()) {
         old_value.resize(start_offset);
         new_value = old_value.append(value.data());
@@ -863,12 +908,14 @@ Status RedisStrings::Setrange(const Slice& key, int64_t start_offset,
     }
     *ret = new_value.length();
     StringsValue strings_value(new_value);
+    string_add_histogram(key.size(), new_value.size());
     return db_->Put(default_write_options_, key, strings_value.Encode());
   } else if (s.IsNotFound()) {
     std::string tmp(start_offset, '\0');
     new_value = tmp.append(value.data());
     *ret = new_value.length();
     StringsValue strings_value(new_value);
+    string_add_histogram(key.size(), new_value.size());
     return db_->Put(default_write_options_, key, strings_value.Encode());
   }
   return s;
@@ -1082,6 +1129,7 @@ Status RedisStrings::PKSetexAt(const Slice& key, const Slice& value, int32_t tim
   StringsValue strings_value(value);
   ScopeRecordLock l(lock_mgr_, key);
   strings_value.set_timestamp(timestamp);
+  string_add_histogram(key.size(), value.size());
   return db_->Put(default_write_options_, key, strings_value.Encode());
 }
 
@@ -1216,6 +1264,7 @@ Status RedisStrings::PKRScanRange(const Slice& key_start,
 
 Status RedisStrings::Expire(const Slice& key, int32_t ttl) {
   if (ttl < 0) {
+    string_del_histogram(key.size(), 0);
     return db_->Delete(default_write_options_, key);
   }
   std::string value;
@@ -1241,6 +1290,7 @@ Status RedisStrings::Del(const Slice& key) {
     if (parsed_strings_value.IsStale()) {
       return Status::NotFound("Stale");
     }
+    string_del_histogram(key.size(), 0);
     return db_->Delete(default_write_options_, key);
   }
   return s;
