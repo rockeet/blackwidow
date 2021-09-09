@@ -643,6 +643,7 @@ void AppendIsoDateTime(std::string* str, time_t t) {
   str->resize(oldsize + strftime(&(*str)[oldsize], 64, "%F %T", pti));
 }
 struct BaseDataKeyDecoder : public UserKeyCoder {
+  const char* Name() const override { return "BaseDataKeyDecoder"; }
   void Update(const json&, const SidePluginRepo&) override {
   }
   std::string ToString(const json&, const SidePluginRepo&) const override {
@@ -670,6 +671,7 @@ ROCKSDB_REG_DEFAULT_CONS(BaseDataKeyDecoder, AnyPlugin);
 ROCKSDB_REG_AnyPluginManip("BaseDataKeyDecoder");
 
 struct ZSetsScoreKeyDecoder : public UserKeyCoder {
+  const char* Name() const override { return "ZSetsScoreKeyDecoder"; }
   void Update(const json&, const SidePluginRepo&) override {
   }
   std::string ToString(const json&, const SidePluginRepo&) const override {
@@ -700,6 +702,7 @@ ROCKSDB_REG_DEFAULT_CONS(ZSetsScoreKeyDecoder, AnyPlugin);
 ROCKSDB_REG_AnyPluginManip("ZSetsScoreKeyDecoder");
 
 struct ListsDataKeyDecoder : public UserKeyCoder {
+  const char* Name() const override { return "ListsDataKeyDecoder"; }
   void Update(const json&, const SidePluginRepo&) override {
   }
   std::string ToString(const json&, const SidePluginRepo&) const override {
