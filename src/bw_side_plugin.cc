@@ -874,102 +874,179 @@ struct FilterFactory_Manip : PluginManipFunc<CompactionFilterFactory> {
 
       json js;
 
-      js["local"]["exec_filter_times"] = local_fl_cnt.exec_filter_times;
-      js["local"]["retained"]["total_num"] = local_fl_cnt.all_retained.num;
-      js["local"]["deleted"]["not_found"]["num"] = local_fl_cnt.deleted_not_found.num;
-      js["local"]["deleted"]["expired"]["num"] = local_fl_cnt.deleted_expired.num;
-      js["local"]["deleted"]["versions_old"]["num"] =
-          local_fl_cnt.deleted_versions_old.num;
-      js["local"]["deleted"]["total_num"] = local_fl_cnt.deleted_not_found.num +
-                                            local_fl_cnt.deleted_expired.num +
-                                            local_fl_cnt.deleted_versions_old.num;
-
-      js["remote"]["exec_filter_times"] = remote_fl_cnt.exec_filter_times;
-      js["remote"]["retained"]["total_num"] = remote_fl_cnt.all_retained.num;
-      js["remote"]["deleted"]["not_found"]["num"] = remote_fl_cnt.deleted_not_found.num;
-      js["remote"]["deleted"]["expired"]["num"] = remote_fl_cnt.deleted_expired.num;
-      js["remote"]["deleted"]["versions_old"]["num"] =
-          remote_fl_cnt.deleted_versions_old.num;
-      js["remote"]["deleted"]["total_num"] = remote_fl_cnt.deleted_not_found.num +
-                                            remote_fl_cnt.deleted_expired.num +
-                                            remote_fl_cnt.deleted_versions_old.num;
-
       if (JsonSmartBool(dump_options, "html", true)) {
-        js["local"]["retained"]["keys_size"] =
-            SizeToString(local_fl_cnt.all_retained.keys_size);
-        js["local"]["retained"]["vals_size"] =
-            SizeToString(local_fl_cnt.all_retained.vals_size);
-        js["local"]["retained"]["total_size"] =
-            SizeToString(local_fl_cnt.all_retained.keys_size + local_fl_cnt.all_retained.vals_size);
-        js["local"]["deleted"]["not_found"]["keys_size"] =
-            SizeToString(local_fl_cnt.deleted_not_found.keys_size);
-        js["local"]["deleted"]["not_found"]["vals_size"] =
-            SizeToString(local_fl_cnt.deleted_not_found.vals_size);
-        js["local"]["deleted"]["not_found"]["total_size"] = SizeToString(
-            local_fl_cnt.deleted_not_found.keys_size + local_fl_cnt.deleted_not_found.vals_size);
-        js["local"]["deleted"]["expired"]["keys_size"] =
-            SizeToString(local_fl_cnt.deleted_expired.keys_size);
-        js["local"]["deleted"]["expired"]["vals_size"] =
-            SizeToString(local_fl_cnt.deleted_expired.vals_size);
-        js["local"]["deleted"]["expired"]["total_size"] = SizeToString(
-            local_fl_cnt.deleted_expired.keys_size + local_fl_cnt.deleted_expired.vals_size);
-        js["local"]["deleted"]["versions_old"]["keys_size"] =
-            SizeToString(local_fl_cnt.deleted_versions_old.keys_size);
-        js["local"]["deleted"]["versions_old"]["vals_size"] =
-            SizeToString(local_fl_cnt.deleted_versions_old.vals_size);
-        js["local"]["deleted"]["versions_old"]["total_size"] =
-            SizeToString(local_fl_cnt.deleted_versions_old.keys_size +
-                         local_fl_cnt.deleted_versions_old.vals_size);
-        js["local"]["deleted"]["total_keys_size"] = SizeToString(
-            local_fl_cnt.deleted_not_found.keys_size + local_fl_cnt.deleted_expired.keys_size +
-            local_fl_cnt.deleted_versions_old.keys_size);
-        js["local"]["deleted"]["total_vals_size"] = SizeToString(
-            local_fl_cnt.deleted_not_found.vals_size + local_fl_cnt.deleted_expired.vals_size +
-            local_fl_cnt.deleted_versions_old.vals_size);
-        js["local"]["deleted"]["total_size"] = SizeToString(
-            local_fl_cnt.deleted_not_found.keys_size + local_fl_cnt.deleted_not_found.vals_size +
-            local_fl_cnt.deleted_expired.keys_size + local_fl_cnt.deleted_expired.vals_size +
-            local_fl_cnt.deleted_versions_old.keys_size +
-            local_fl_cnt.deleted_versions_old.vals_size);
+        
+        // local
+        js["local"]["exec_filter_times"] = local_fl_cnt.exec_filter_times;
 
-        js["remote"]["retained"]["keys_size"] =
+        json joverview_local, jretained_local, jdeleted_local;
+        jretained_local["-"] = "retained";
+        jdeleted_local["-"] = "deleted";
+        jretained_local["num"] = local_fl_cnt.all_retained.num;
+        jdeleted_local["num"] = local_fl_cnt.deleted_not_found.num +
+                          local_fl_cnt.deleted_expired.num +
+                          local_fl_cnt.deleted_versions_old.num;
+        jretained_local["keys_size"] =
+            SizeToString(local_fl_cnt.all_retained.keys_size);
+        jdeleted_local["keys_size"] =
+            SizeToString(local_fl_cnt.deleted_not_found.keys_size +
+                         local_fl_cnt.deleted_expired.keys_size +
+                         local_fl_cnt.deleted_versions_old.keys_size);
+        jretained_local["vals_size"] =
+            SizeToString(local_fl_cnt.all_retained.vals_size);
+        jdeleted_local["vals_size"] =
+            SizeToString(local_fl_cnt.deleted_not_found.vals_size +
+                         local_fl_cnt.deleted_expired.vals_size +
+                         local_fl_cnt.deleted_versions_old.vals_size);
+        jretained_local["total_size"] =
+            SizeToString(local_fl_cnt.all_retained.keys_size +
+                         local_fl_cnt.all_retained.vals_size);
+        jdeleted_local["total_size"] =
+            SizeToString(local_fl_cnt.deleted_not_found.keys_size +
+                         local_fl_cnt.deleted_not_found.vals_size +
+                         local_fl_cnt.deleted_expired.keys_size +
+                         local_fl_cnt.deleted_expired.vals_size +
+                         local_fl_cnt.deleted_versions_old.keys_size +
+                         local_fl_cnt.deleted_versions_old.vals_size);
+        joverview_local.push_back(std::move(jretained_local));
+        joverview_local.push_back(std::move(jdeleted_local));
+        json &jtabcols_ov_local = joverview_local[0]["<htmltab:col>"];
+        jtabcols_ov_local.push_back("-");
+        jtabcols_ov_local.push_back("num");
+        jtabcols_ov_local.push_back("keys_size");
+        jtabcols_ov_local.push_back("vals_size");
+        jtabcols_ov_local.push_back("total_size");
+        js["local"]["overview"] = std::move(joverview_local);
+
+        json jdel_local, jnf_local, jexp_local, jvold_local;
+        jnf_local["-"] = "not_found";
+        jexp_local["-"] = "expired";
+        jvold_local["-"] = "version_old";
+        jnf_local["num"] = local_fl_cnt.deleted_not_found.num;
+        jexp_local["num"] = local_fl_cnt.deleted_expired.num;
+        jvold_local["num"] = local_fl_cnt.deleted_versions_old.num;
+        jnf_local["keys_size"] = SizeToString(local_fl_cnt.deleted_not_found.keys_size);
+        jexp_local["keys_size"] = SizeToString(local_fl_cnt.deleted_expired.keys_size);
+        jvold_local["keys_size"] = SizeToString(local_fl_cnt.deleted_versions_old.keys_size);
+        jnf_local["vals_size"] = SizeToString(local_fl_cnt.deleted_not_found.vals_size);
+        jexp_local["vals_size"] = SizeToString(local_fl_cnt.deleted_expired.vals_size);
+        jvold_local["vals_size"] = SizeToString(local_fl_cnt.deleted_versions_old.vals_size);
+        jnf_local["total_size"] = SizeToString(
+            local_fl_cnt.deleted_not_found.keys_size + local_fl_cnt.deleted_not_found.vals_size);
+        jexp_local["total_size"] = SizeToString(
+            local_fl_cnt.deleted_expired.keys_size + local_fl_cnt.deleted_expired.vals_size);
+        jvold_local["total_size"] = SizeToString(local_fl_cnt.deleted_versions_old.keys_size +
+                         local_fl_cnt.deleted_versions_old.vals_size);
+        jdel_local.push_back(std::move(jnf_local));
+        jdel_local.push_back(std::move(jexp_local));
+        jdel_local.push_back(std::move(jvold_local));
+        json &jtabcols_del_local = jdel_local[0]["<htmltab:col>"];
+        jtabcols_del_local.push_back("-");
+        jtabcols_del_local.push_back("keys_size");
+        jtabcols_del_local.push_back("vals_size");
+        jtabcols_del_local.push_back("total_size");
+        js["local"]["deleted"] = std::move(jdel_local);
+
+        // remote
+        js["remote"]["exec_filter_times"] = remote_fl_cnt.exec_filter_times;
+
+        json joverview_remote, jretained_remote, jdeleted_remote;
+        jretained_remote["-"] = "retained";
+        jdeleted_remote["-"] = "deleted";
+        jretained_remote["num"] = remote_fl_cnt.all_retained.num;
+        jdeleted_remote["num"] = remote_fl_cnt.deleted_not_found.num +
+                          remote_fl_cnt.deleted_expired.num +
+                          remote_fl_cnt.deleted_versions_old.num;
+        jretained_remote["keys_size"] =
             SizeToString(remote_fl_cnt.all_retained.keys_size);
-        js["remote"]["retained"]["vals_size"] =
+        jdeleted_remote["keys_size"] =
+            SizeToString(remote_fl_cnt.deleted_not_found.keys_size +
+                         remote_fl_cnt.deleted_expired.keys_size +
+                         remote_fl_cnt.deleted_versions_old.keys_size);
+        jretained_remote["vals_size"] =
             SizeToString(remote_fl_cnt.all_retained.vals_size);
-        js["remote"]["retained"]["total_size"] =
-            SizeToString(remote_fl_cnt.all_retained.keys_size + remote_fl_cnt.all_retained.vals_size);
-        js["remote"]["deleted"]["not_found"]["keys_size"] =
-            SizeToString(remote_fl_cnt.deleted_not_found.keys_size);
-        js["remote"]["deleted"]["not_found"]["vals_size"] =
-            SizeToString(remote_fl_cnt.deleted_not_found.vals_size);
-        js["remote"]["deleted"]["not_found"]["total_size"] = SizeToString(
-            remote_fl_cnt.deleted_not_found.keys_size + remote_fl_cnt.deleted_not_found.vals_size);
-        js["remote"]["deleted"]["expired"]["keys_size"] =
-            SizeToString(remote_fl_cnt.deleted_expired.keys_size);
-        js["remote"]["deleted"]["expired"]["vals_size"] =
-            SizeToString(remote_fl_cnt.deleted_expired.vals_size);
-        js["remote"]["deleted"]["expired"]["total_size"] = SizeToString(
-            remote_fl_cnt.deleted_expired.keys_size + remote_fl_cnt.deleted_expired.vals_size);
-        js["remote"]["deleted"]["versions_old"]["keys_size"] =
-            SizeToString(remote_fl_cnt.deleted_versions_old.keys_size);
-        js["remote"]["deleted"]["versions_old"]["vals_size"] =
-            SizeToString(remote_fl_cnt.deleted_versions_old.vals_size);
-        js["remote"]["deleted"]["versions_old"]["total_size"] =
-            SizeToString(remote_fl_cnt.deleted_versions_old.keys_size +
+        jdeleted_remote["vals_size"] =
+            SizeToString(remote_fl_cnt.deleted_not_found.vals_size +
+                         remote_fl_cnt.deleted_expired.vals_size +
                          remote_fl_cnt.deleted_versions_old.vals_size);
-        js["remote"]["deleted"]["total_keys_size"] = SizeToString(
-            remote_fl_cnt.deleted_not_found.keys_size + remote_fl_cnt.deleted_expired.keys_size +
-            remote_fl_cnt.deleted_versions_old.keys_size);
-        js["remote"]["deleted"]["total_vals_size"] = SizeToString(
-            remote_fl_cnt.deleted_not_found.vals_size + remote_fl_cnt.deleted_expired.vals_size +
-            remote_fl_cnt.deleted_versions_old.vals_size);
-        js["remote"]["deleted"]["total_size"] = SizeToString(
-            remote_fl_cnt.deleted_not_found.keys_size + remote_fl_cnt.deleted_not_found.vals_size +
-            remote_fl_cnt.deleted_expired.keys_size + remote_fl_cnt.deleted_expired.vals_size +
-            remote_fl_cnt.deleted_versions_old.keys_size +
-            remote_fl_cnt.deleted_versions_old.vals_size);
+        jretained_remote["total_size"] =
+            SizeToString(remote_fl_cnt.all_retained.keys_size +
+                         remote_fl_cnt.all_retained.vals_size);
+        jdeleted_remote["total_size"] =
+            SizeToString(remote_fl_cnt.deleted_not_found.keys_size +
+                         remote_fl_cnt.deleted_not_found.vals_size +
+                         remote_fl_cnt.deleted_expired.keys_size +
+                         remote_fl_cnt.deleted_expired.vals_size +
+                         remote_fl_cnt.deleted_versions_old.keys_size +
+                         remote_fl_cnt.deleted_versions_old.vals_size);
+        joverview_remote.push_back(std::move(jretained_remote));
+        joverview_remote.push_back(std::move(jdeleted_remote));
+        json &jtabcols_ov_remote = joverview_remote[0]["<htmltab:col>"];
+        jtabcols_ov_remote.push_back("-");
+        jtabcols_ov_remote.push_back("num");
+        jtabcols_ov_remote.push_back("keys_size");
+        jtabcols_ov_remote.push_back("vals_size");
+        jtabcols_ov_remote.push_back("total_size");
+        js["remote"]["overview"] = std::move(joverview_remote);
+
+        json jdel_remote, jnf_remote, jexp_remote, jvold_remote;
+        jnf_remote["-"] = "not_found";
+        jexp_remote["-"] = "expired";
+        jvold_remote["-"] = "version_old";
+        jnf_remote["num"] = remote_fl_cnt.deleted_not_found.num;
+        jexp_remote["num"] = remote_fl_cnt.deleted_expired.num;
+        jvold_remote["num"] = remote_fl_cnt.deleted_versions_old.num;
+        jnf_remote["keys_size"] = SizeToString(remote_fl_cnt.deleted_not_found.keys_size);
+        jexp_remote["keys_size"] = SizeToString(remote_fl_cnt.deleted_expired.keys_size);
+        jvold_remote["keys_size"] = SizeToString(remote_fl_cnt.deleted_versions_old.keys_size);
+        jnf_remote["vals_size"] = SizeToString(remote_fl_cnt.deleted_not_found.vals_size);
+        jexp_remote["vals_size"] = SizeToString(remote_fl_cnt.deleted_expired.vals_size);
+        jvold_remote["vals_size"] = SizeToString(remote_fl_cnt.deleted_versions_old.vals_size);
+        jnf_remote["total_size"] = SizeToString(
+            remote_fl_cnt.deleted_not_found.keys_size + remote_fl_cnt.deleted_not_found.vals_size);
+        jexp_remote["total_size"] = SizeToString(
+            remote_fl_cnt.deleted_expired.keys_size + remote_fl_cnt.deleted_expired.vals_size);
+        jvold_remote["total_size"] = SizeToString(remote_fl_cnt.deleted_versions_old.keys_size +
+                         remote_fl_cnt.deleted_versions_old.vals_size);
+        jdel_remote.push_back(std::move(jnf_remote));
+        jdel_remote.push_back(std::move(jexp_remote));
+        jdel_remote.push_back(std::move(jvold_remote));
+        json &jtabcols_del_remote = jdel_remote[0]["<htmltab:col>"];
+        jtabcols_del_remote.push_back("-");
+        jtabcols_del_remote.push_back("keys_size");
+        jtabcols_del_remote.push_back("vals_size");
+        jtabcols_del_remote.push_back("total_size");
+        js["remote"]["deleted"] = std::move(jdel_remote);
+
       } else {
-        js["local"]["retained"]["keys_size"] = local_fl_cnt.all_retained.keys_size;
+        js["local"]["exec_filter_times"] = local_fl_cnt.exec_filter_times;
+        js["local"]["retained"]["total_num"] = local_fl_cnt.all_retained.num;
+        js["local"]["deleted"]["not_found"]["num"] =
+            local_fl_cnt.deleted_not_found.num;
+        js["local"]["deleted"]["expired"]["num"] =
+            local_fl_cnt.deleted_expired.num;
+        js["local"]["deleted"]["versions_old"]["num"] =
+            local_fl_cnt.deleted_versions_old.num;
+        js["local"]["deleted"]["total_num"] =
+            local_fl_cnt.deleted_not_found.num +
+            local_fl_cnt.deleted_expired.num +
+            local_fl_cnt.deleted_versions_old.num;
+
+        js["remote"]["exec_filter_times"] = remote_fl_cnt.exec_filter_times;
+        js["remote"]["retained"]["total_num"] = remote_fl_cnt.all_retained.num;
+        js["remote"]["deleted"]["not_found"]["num"] =
+            remote_fl_cnt.deleted_not_found.num;
+        js["remote"]["deleted"]["expired"]["num"] =
+            remote_fl_cnt.deleted_expired.num;
+        js["remote"]["deleted"]["versions_old"]["num"] =
+            remote_fl_cnt.deleted_versions_old.num;
+        js["remote"]["deleted"]["total_num"] =
+            remote_fl_cnt.deleted_not_found.num +
+            remote_fl_cnt.deleted_expired.num +
+            remote_fl_cnt.deleted_versions_old.num;
+
+        js["local"]["retained"]["keys_size"] =
+            local_fl_cnt.all_retained.keys_size;
         js["local"]["retained"]["vals_size"] = local_fl_cnt.all_retained.vals_size;
         js["local"]["retained"]["total_size"] =
             local_fl_cnt.all_retained.keys_size + local_fl_cnt.all_retained.vals_size;
