@@ -111,4 +111,35 @@ std::string DbReadWriteHistogram::get_metric() {
   return oss.str();
 }
 
+std::string DbReadWriteHistogram::get_html() {
+  std::ostringstream oss;
+  oss<<"<tr><td>";
+  oss<<"<table border=1><tbody>";
+  oss<<"<tr><th>type</th><th>P50</th><th>P95</th><th>P99</th><th>AVG</th><th>MIN</th><th>MAX</th><th>CNT</th><th>STD</th><th>SUM</th></tr>";
+  for (int type = 0; type < DBTypeMax; type++) {
+    for (int step = 0; step < ProcessTypeMax; step++) {
+      for (int field = 0; field < FieldValueMax; field++) {
+        auto &histogram = data->HistogramTable[type][step][field];
+
+        oss << "<tr>";
+        oss << "<td>" << type_str[type] << ":" << step_str[step] << ":" << field_str[field] << "</td>";
+        oss << "<td>" << histogram.Percentile(50) << "</td>";
+        oss << "<td>" << histogram.Percentile(95) << "</td>";
+        oss << "<td>" << histogram.Percentile(99) << "</td>";
+        oss << "<td>" << histogram.Average() << "</td>";
+        oss << "<td>" << histogram.min() << "</td>";
+        oss << "<td>" << histogram.max() << "</td>";
+        oss << "<td>" << histogram.num() << "</td>";
+        oss << "<td>" << histogram.StandardDeviation() << "</td>";
+        oss << "<td>" << histogram.sum() << "</td>";
+        oss << "</tr>";
+      }
+    }
+  }
+  oss << "</tbody></table>";
+  oss << "</td></tr>";
+
+  return oss.str();
+}
+
 } // end db_rw_histogram

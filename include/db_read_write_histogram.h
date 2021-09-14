@@ -47,15 +47,16 @@ public:
   ~DbReadWriteHistogram();
   void Add_Histogram_Metric(const data_type type, process_type step, field_value filed, long value);
   std::string get_metric();
+  std::string get_html();
   void reset();
 
 private:
   int fd;
   long get_check_sum();
   HistogramData *data;
-  std::vector<std::string> const type_str{"hash","list","set","zset"};  //adpater data_type
+  std::vector<std::string> const type_str{"string","hash","list","set","zset"};  //adpater data_type
   std::vector<std::string> const step_str{"add","del"};  //adpater process_type
-  std::vector<std::string> const field_str{"field","value"};  //adpater process_type
+  std::vector<std::string> const field_str{"key","field","value"};  //adpater process_type
 };
 
 } // end db_rw_histogram
