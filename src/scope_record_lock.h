@@ -17,10 +17,10 @@ class ScopeRecordLock {
  public:
   ScopeRecordLock(LockMgr* lock_mgr, const Slice& key) :
     lock_mgr_(lock_mgr), key_(key) {
-    lock_mgr_->TryLock(key_.ToString());
+    lock_mgr_->TryLock(key_);
   }
   ~ScopeRecordLock() {
-    lock_mgr_->UnLock(key_.ToString());
+    lock_mgr_->UnLock(key_);
   }
 
  private:
@@ -32,42 +32,25 @@ class ScopeRecordLock {
 
 class MultiScopeRecordLock {
  public:
-  MultiScopeRecordLock(LockMgr* lock_mgr,
-                       const std::vector<std::string>& keys) :
-      lock_mgr_(lock_mgr),
-      keys_(keys) {
-    std::string pre_key;
-    std::sort(keys_.begin(), keys_.end());
-    if (!keys_.empty() &&
-      keys_[0].empty()) {
-      lock_mgr_->TryLock(pre_key);
-    }
-
-    for (const auto& key : keys_) {
-      if (pre_key != key) {
-        lock_mgr_->TryLock(key);
-        pre_key = key;
-      }
+  MultiScopeRecordLock(LockMgr* lock_mgr, Slice* keys, size_t num) :
+      lock_mgr_(lock_mgr), keys_(keys) {
+    std::sort(keys, keys + num);
+    num_ = num = std::unique(keys, keys + num) - keys;
+    for (size_t i = 0; i < num; ++i) {
+      lock_mgr->TryLock(keys[i]);
     }
   }
   ~MultiScopeRecordLock() {
-    std::string pre_key;
-    if (!keys_.empty() &&
-      keys_[0].empty()) {
-      lock_mgr_->UnLock(pre_key);
-    }
-
-    for (const auto& key : keys_) {
-      if (pre_key != key) {
-        lock_mgr_->UnLock(key);
-        pre_key = key;
-      }
+    for (size_t i = num_; i; ) {
+      i--;
+      lock_mgr_->UnLock(keys_[i]);
     }
   }
 
  private:
   LockMgr* const lock_mgr_;
-  std::vector<std::string> keys_;
+  Slice* keys_;
+  size_t num_;
   MultiScopeRecordLock(const MultiScopeRecordLock&);
   void operator=(const MultiScopeRecordLock&);
 };

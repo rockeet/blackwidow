@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <limits>
 
+#include <terark/util/autofree.hpp>
 #include "blackwidow/util.h"
 #include "src/strings_filter.h"
 #include "src/scope_record_lock.h"
@@ -605,12 +606,12 @@ Status RedisStrings::MGet(const std::vector<std::string>& keys,
 }
 
 Status RedisStrings::MSet(const std::vector<KeyValue>& kvs) {
-  std::vector<std::string> keys;
-  for (const auto& kv :  kvs) {
-    keys.push_back(kv.key);
+  const size_t num = kvs.size();
+  terark::AutoFree<rocksdb::Slice> keys(num);
+  for (size_t i = 0; i < num; ++i) {
+    keys.p[i] = kvs[i].key;
   }
-
-  MultiScopeRecordLock ml(lock_mgr_, keys);
+  MultiScopeRecordLock ml(lock_mgr_, keys.p, num);
   rocksdb::WriteBatch batch;
   for (const auto& kv : kvs) {
     StringsValue strings_value(kv.value);

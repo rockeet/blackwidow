@@ -10,6 +10,7 @@
 #include <memory>
 
 #include "src/mutex.h"
+#include <rocksdb/slice.h>
 
 namespace blackwidow {
 
@@ -25,10 +26,10 @@ class LockMgr {
 
   // Attempt to lock key.  If OK status is returned, the caller is responsible
   // for calling UnLock() on this key.
-  Status TryLock(const std::string& key);
+  Status TryLock(const rocksdb::Slice& key);
 
   // Unlock a key locked by TryLock().
-  void UnLock(const std::string& key);
+  void UnLock(const rocksdb::Slice& key);
 
  private:
   // Default number of lock map stripes
@@ -43,15 +44,15 @@ class LockMgr {
   // Map to locked key info
   std::shared_ptr<LockMap> lock_map_;
 
-  Status Acquire(LockMapStripe* stripe, const std::string& key);
+  Status Acquire(LockMapStripe* stripe, const rocksdb::Slice& key);
 
-  Status AcquireLocked(LockMapStripe* stripe, const std::string& key);
+  Status AcquireLocked(LockMapStripe* stripe, const rocksdb::Slice& key);
 
-  void UnLockKey(const std::string& key, LockMapStripe* stripe);
+  void UnLockKey(const rocksdb::Slice& key, LockMapStripe* stripe);
 
   // No copying allowed
-  LockMgr(const LockMgr&);
-  void operator=(const LockMgr&);
+  LockMgr(const LockMgr&) = delete;
+  void operator=(const LockMgr&) = delete;
 };
 
 }  //  namespace blackwidow

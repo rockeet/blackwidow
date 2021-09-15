@@ -826,8 +826,8 @@ Status RedisLists::RPoplpush(const Slice& source,
   uint32_t statistic = 0;
   Status s;
   rocksdb::WriteBatch batch;
-  MultiScopeRecordLock l(lock_mgr_,
-      {source.ToString(), destination.ToString()});
+  rocksdb::Slice lockKeys[2] = {source, destination};
+  MultiScopeRecordLock l(lock_mgr_, lockKeys, 2);
   if (!source.compare(destination)) {
     std::string meta_value;
     s = db_->Get(default_read_options_, handles_[0], source, &meta_value);

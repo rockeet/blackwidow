@@ -16,6 +16,8 @@
 
 #include "src/mutex.h"
 #include "src/murmurhash.h"
+#include <terark/hash_strmap.hpp>
+#include <terark/util/function.hpp>
 
 namespace blackwidow {
 
@@ -25,6 +27,7 @@ struct LockMapStripe {
     stripe_cv = factory->AllocateCondVar();
     assert(stripe_mutex);
     assert(stripe_cv);
+    keys.reserve(128, 2048);
   }
 
   // Mutex must be held before modifying keys map
@@ -34,7 +37,7 @@ struct LockMapStripe {
   std::shared_ptr<CondVar> stripe_cv;
 
   // Locked keys
-  std::unordered_set<std::string> keys;
+  terark::hash_strmap<> keys;
 };
 
 // Map of #num_stripes LockMapStripes
@@ -64,10 +67,10 @@ struct LockMap {
 
   std::vector<LockMapStripe*> lock_map_stripes_;
 
-  size_t GetStripe(const std::string& key) const;
+  size_t GetStripe(const rocksdb::Slice& key) const;
 };
 
-size_t LockMap::GetStripe(const std::string& key) const {
+size_t LockMap::GetStripe(const rocksdb::Slice& key) const {
   assert(num_stripes_ > 0);
   static murmur_hash hash;
   size_t stripe = hash(key) % num_stripes_;
@@ -85,13 +88,13 @@ LockMgr::LockMgr(size_t default_num_stripes,
 
 LockMgr::~LockMgr() {}
 
-Status LockMgr::TryLock(const std::string& key) {
+Status LockMgr::TryLock(const rocksdb::Slice& key) {
 #ifdef LOCKLESS
   return Status::OK();
 #else
   size_t stripe_num = lock_map_->GetStripe(key);
   assert(lock_map_->lock_map_stripes_.size() > stripe_num);
-  LockMapStripe* stripe = lock_map_->lock_map_stripes_.at(stripe_num);
+  LockMapStripe* stripe = lock_map_->lock_map_stripes_[stripe_num];
 
   return Acquire(stripe, key);
 #endif
@@ -99,16 +102,17 @@ Status LockMgr::TryLock(const std::string& key) {
 
 // Helper function for TryLock().
 Status LockMgr::Acquire(LockMapStripe* stripe,
-                        const std::string& key) {
-  Status result;
-
+                        const rocksdb::Slice& key) {
   // we wait indefinitely to acquire the lock
-  result = stripe->stripe_mutex->Lock();
-
+  Status result = stripe->stripe_mutex->Lock();
+#if 1
+  TERARK_VERIFY_S(result.ok(), "%s", result.ToString());
+#else
   if (!result.ok()) {
     // failed to acquire mutex
     return result;
   }
+#endif
 
   // Acquire lock if we are able to
   result = AcquireLocked(stripe, key);
@@ -131,19 +135,19 @@ Status LockMgr::Acquire(LockMapStripe* stripe,
 // Try to lock this key after we have acquired the mutex.
 // REQUIRED:  Stripe mutex must be held.
 Status LockMgr::AcquireLocked(LockMapStripe* stripe,
-                              const std::string& key) {
+                              const rocksdb::Slice& key) {
   Status result;
   // Check lock limit
   if (max_num_locks_ > 0 &&
       lock_map_->lock_cnt.load(std::memory_order_relaxed) >= max_num_locks_) {
-    if (stripe->keys.find(key) == stripe->keys.end())
+    if (!stripe->keys.exists(key))
       result = Status::Busy(Status::SubCode::kLockLimit);
     else
       result = Status::Busy(Status::SubCode::kLockTimeout);
   }
   else {
     // Check if this key is already locked
-    if (!stripe->keys.insert(key).second) { // existed
+    if (!stripe->keys.insert_i(key).second) { // existed
       // Lock already held
         result = Status::Busy(Status::SubCode::kLockTimeout);
     } else {  // Lock not held.
@@ -156,13 +160,13 @@ Status LockMgr::AcquireLocked(LockMapStripe* stripe,
   return result;
 }
 
-void LockMgr::UnLockKey(const std::string& key, LockMapStripe* stripe) {
+void LockMgr::UnLockKey(const rocksdb::Slice& key, LockMapStripe* stripe) {
 #ifdef LOCKLESS
 #else
-  auto stripe_iter = stripe->keys.find(key);
-  if (stripe_iter != stripe->keys.end()) {
+  const size_t idx = stripe->keys.find_i(key);
+  if (stripe->keys.end_i() != idx) {
     // Found the key locked.  unlock it.
-    stripe->keys.erase(stripe_iter);
+    stripe->keys.erase_i(idx);
     if (max_num_locks_ > 0) {
       // Maintain lock count if there is a limit on the number of locks.
       assert(lock_map_->lock_cnt.load(std::memory_order_relaxed) > 0);
@@ -174,7 +178,7 @@ void LockMgr::UnLockKey(const std::string& key, LockMapStripe* stripe) {
 #endif
 }
 
-void LockMgr::UnLock(const std::string& key) {
+void LockMgr::UnLock(const rocksdb::Slice& key) {
   // Lock the mutex for the stripe that this key hashes to
   size_t stripe_num = lock_map_->GetStripe(key);
   assert(lock_map_->lock_map_stripes_.size() > stripe_num);

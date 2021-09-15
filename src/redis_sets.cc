@@ -754,8 +754,8 @@ Status RedisSets::SMove(const Slice& source, const Slice& destination,
   int32_t version = 0;
   uint32_t statistic = 0;
   std::string meta_value;
-  std::vector<std::string> keys {source.ToString(), destination.ToString()};
-  MultiScopeRecordLock ml(lock_mgr_, keys);
+  Slice lockKeys[2] = {source, destination};
+  MultiScopeRecordLock ml(lock_mgr_, lockKeys, 2);
 
   if (source == destination) {
     *ret = 1;
