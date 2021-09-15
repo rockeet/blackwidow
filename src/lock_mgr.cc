@@ -28,6 +28,7 @@ struct LockMapStripe {
     assert(stripe_mutex);
     assert(stripe_cv);
     keys.reserve(128, 2048);
+    keys.enable_freelist(16384); // non freelist is buggy now
   }
 
   // Mutex must be held before modifying keys map

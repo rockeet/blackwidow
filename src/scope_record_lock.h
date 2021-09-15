@@ -15,7 +15,7 @@
 namespace blackwidow {
 class ScopeRecordLock {
  public:
-  ScopeRecordLock(LockMgr* lock_mgr, const Slice& key) :
+  ScopeRecordLock(LockMgr* lock_mgr, const rocksdb::Slice& key) :
     lock_mgr_(lock_mgr), key_(key) {
     lock_mgr_->TryLock(key_);
   }
@@ -25,34 +25,22 @@ class ScopeRecordLock {
 
  private:
   LockMgr* const lock_mgr_;
-  Slice key_;
-  ScopeRecordLock(const ScopeRecordLock&);
-  void operator=(const ScopeRecordLock&);
+  rocksdb::Slice key_;
+  ScopeRecordLock(const ScopeRecordLock&) = delete;
+  void operator=(const ScopeRecordLock&) = delete;
 };
 
 class MultiScopeRecordLock {
  public:
-  MultiScopeRecordLock(LockMgr* lock_mgr, Slice* keys, size_t num) :
-      lock_mgr_(lock_mgr), keys_(keys) {
-    std::sort(keys, keys + num);
-    num_ = num = std::unique(keys, keys + num) - keys;
-    for (size_t i = 0; i < num; ++i) {
-      lock_mgr->TryLock(keys[i]);
-    }
-  }
-  ~MultiScopeRecordLock() {
-    for (size_t i = num_; i; ) {
-      i--;
-      lock_mgr_->UnLock(keys_[i]);
-    }
-  }
+  MultiScopeRecordLock(LockMgr* lock_mgr, rocksdb::Slice* keys, size_t num);
+  ~MultiScopeRecordLock();
 
  private:
   LockMgr* const lock_mgr_;
-  Slice* keys_;
+  rocksdb::Slice* keys_;
   size_t num_;
-  MultiScopeRecordLock(const MultiScopeRecordLock&);
-  void operator=(const MultiScopeRecordLock&);
+  MultiScopeRecordLock(const MultiScopeRecordLock&) = delete;
+  void operator=(const MultiScopeRecordLock&) = delete;
 };
 
 }  // namespace blackwidow
