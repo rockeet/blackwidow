@@ -14,9 +14,9 @@
 #include "rocksdb/status.h"
 #include "rocksdb/slice.h"
 
-#include "src/lock_mgr.h"
-#include "src/lru_cache.h"
-#include "src/mutex_impl.h"
+#include "lock_mgr.h"
+#include "lru_cache.h"
+#include "mutex_impl.h"
 #include "blackwidow/blackwidow.h"
 
 namespace blackwidow {

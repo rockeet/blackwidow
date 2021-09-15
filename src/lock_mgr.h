@@ -9,7 +9,7 @@
 #include <string>
 #include <memory>
 
-#include "src/mutex.h"
+#include "mutex.h"
 #include <rocksdb/slice.h>
 
 namespace blackwidow {

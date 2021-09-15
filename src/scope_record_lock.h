@@ -10,7 +10,7 @@
 #include <string>
 #include <algorithm>
 
-#include "src/lock_mgr.h"
+#include "lock_mgr.h"
 
 namespace blackwidow {
 class ScopeRecordLock {

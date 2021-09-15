@@ -6,7 +6,7 @@
 #ifndef SRC_MUTEX_IMPL_H_
 #define SRC_MUTEX_IMPL_H_
 
-#include "src/mutex.h"
+#include "mutex.h"
 
 #include <memory>
 

@@ -7,7 +7,7 @@
 #define __STDC_FORMAT_MACROS
 #endif
 
-#include "src/lock_mgr.h"
+#include "lock_mgr.h"
 
 #include <vector>
 #include <unordered_set>
