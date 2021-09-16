@@ -13,32 +13,52 @@
 #include <unordered_set>
 #include <atomic>
 #include <memory>
+#include <mutex>
+#include <condition_variable>
 
 #include "src/mutex.h"
 #include "src/murmurhash.h"
+#include <terark/fstring.hpp>
+#include <terark/gold_hash_map.hpp>
 #include <terark/hash_strmap.hpp>
 #include <terark/util/function.hpp>
 
 namespace blackwidow {
 
+// gcc-8.4 -O2 bug cause gold_hash_set fail(-O0 is ok)
+// we don't use gold_hash_set, use hash_strmap instead
+#define LockMgr_USE_GOLD_HASH_SET 0
+using namespace terark;
+
 struct LockMapStripe {
   explicit LockMapStripe(const std::shared_ptr<MutexFactory>& factory) {
-    stripe_mutex = factory->AllocateMutex();
-    stripe_cv = factory->AllocateCondVar();
-    assert(stripe_mutex);
-    assert(stripe_cv);
+    // stripe_mutex = factory->AllocateMutex();
+    // stripe_cv = factory->AllocateCondVar();
+    // assert(stripe_mutex);
+    // assert(stripe_cv);
+  #if LockMgr_USE_GOLD_HASH_SET
+    keys.reserve(128);
+  #else
     keys.reserve(128, 2048);
-    keys.enable_freelist(16384); // non freelist is buggy now
+    keys.enable_freelist(1024); // non freelist is buggy now
+  #endif
   }
 
   // Mutex must be held before modifying keys map
-  std::shared_ptr<Mutex> stripe_mutex;
+  // std::shared_ptr<Mutex> stripe_mutex;
+  std::mutex stripe_mutex;
 
   // Condition Variable per stripe for waiting on a lock
-  std::shared_ptr<CondVar> stripe_cv;
+  //std::shared_ptr<CondVar> stripe_cv;
+  std::condition_variable stripe_cv;
 
   // Locked keys
+#if LockMgr_USE_GOLD_HASH_SET
+  // gcc-8.4 -O2 bug cause gold_hash_set fail(-O0 is ok)
+  gold_hash_set<fstring, fstring_func::hash_align, fstring_func::equal_align> keys;
+#else
   terark::hash_strmap<> keys;
+#endif
 };
 
 // Map of #num_stripes LockMapStripes
@@ -104,31 +124,17 @@ Status LockMgr::TryLock(const rocksdb::Slice& key) {
 // Helper function for TryLock().
 Status LockMgr::Acquire(LockMapStripe* stripe,
                         const rocksdb::Slice& key) {
-  // we wait indefinitely to acquire the lock
-  Status result = stripe->stripe_mutex->Lock();
-#if 1
-  TERARK_VERIFY_S(result.ok(), "%s", result.ToString());
-#else
-  if (!result.ok()) {
-    // failed to acquire mutex
-    return result;
-  }
-#endif
+  std::unique_lock<std::mutex> lock(stripe->stripe_mutex);
 
   // Acquire lock if we are able to
-  result = AcquireLocked(stripe, key);
-
+  Status result = AcquireLocked(stripe, key);
   if (!result.ok()) {
     // If we weren't able to acquire the lock, we will keep retrying
     do {
-      result = stripe->stripe_cv->Wait(stripe->stripe_mutex);
-      if (result.ok()) {
-        result = AcquireLocked(stripe, key);
-      }
+      stripe->stripe_cv.wait(lock);
+      result = AcquireLocked(stripe, key);
     } while (!result.ok());
   }
-
-  stripe->stripe_mutex->UnLock();
 
   return result;
 }
@@ -164,17 +170,11 @@ Status LockMgr::AcquireLocked(LockMapStripe* stripe,
 void LockMgr::UnLockKey(const rocksdb::Slice& key, LockMapStripe* stripe) {
 #ifdef LOCKLESS
 #else
-  const size_t idx = stripe->keys.find_i(key);
-  if (stripe->keys.end_i() != idx) {
-    // Found the key locked.  unlock it.
-    stripe->keys.erase_i(idx);
-    if (max_num_locks_ > 0) {
-      // Maintain lock count if there is a limit on the number of locks.
-      assert(lock_map_->lock_cnt.load(std::memory_order_relaxed) > 0);
-      lock_map_->lock_cnt--;
-    }
-  } else {
-    // This key is either not locked or locked by someone else.
+  TERARK_VERIFY_S(stripe->keys.erase(key), "%s", key);
+  if (max_num_locks_ > 0) {
+    // Maintain lock count if there is a limit on the number of locks.
+    assert(lock_map_->lock_cnt.load(std::memory_order_relaxed) > 0);
+    lock_map_->lock_cnt--;
   }
 #endif
 }
@@ -185,11 +185,11 @@ void LockMgr::UnLock(const rocksdb::Slice& key) {
   assert(lock_map_->lock_map_stripes_.size() > stripe_num);
   LockMapStripe* stripe = lock_map_->lock_map_stripes_[stripe_num];
 
-  stripe->stripe_mutex->Lock();
+  stripe->stripe_mutex.lock();
   UnLockKey(key, stripe);
-  stripe->stripe_mutex->UnLock();
+  stripe->stripe_mutex.unlock();
 
   // Signal waiting threads to retry locking
-  stripe->stripe_cv->NotifyAll();
+  stripe->stripe_cv.notify_all();
 }
 }  //  namespace blackwidow
