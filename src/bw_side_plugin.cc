@@ -875,7 +875,7 @@ struct FilterFactory_Manip : PluginManipFunc<CompactionFilterFactory> {
       json js;
 
       if (JsonSmartBool(dump_options, "html", true)) {
-        
+
         // local
         js["local"]["exec_filter_times"] = local_fl_cnt.exec_filter_times;
 
