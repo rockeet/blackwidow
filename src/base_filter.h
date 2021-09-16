@@ -28,6 +28,8 @@ rocksdb::Iterator* NewMetaIter(rocksdb::DB*, ColumnFamilyHandle*, uint64_t);
 
 class BaseMetaFilterFactory;
 
+class BaseMetaFilterFactory;
+
 class BaseMetaFilter : public rocksdb::CompactionFilter {
  public:
   BaseMetaFilter() = default;
