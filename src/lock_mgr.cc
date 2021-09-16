@@ -26,6 +26,7 @@
 namespace blackwidow {
 
 // gcc-8.4 -O2 bug cause gold_hash_set fail(-O0 is ok)
+// gcc-11.2 also has bug for gold_hash_set
 // we don't use gold_hash_set, use hash_strmap instead
 #define LockMgr_USE_GOLD_HASH_SET 0
 using namespace terark;
@@ -55,6 +56,7 @@ struct LockMapStripe {
   // Locked keys
 #if LockMgr_USE_GOLD_HASH_SET
   // gcc-8.4 -O2 bug cause gold_hash_set fail(-O0 is ok)
+  // gcc-11.2 also has bug for gold_hash_set
   gold_hash_set<fstring, fstring_func::hash_align, fstring_func::equal_align> keys;
 #else
   terark::hash_strmap<> keys;
