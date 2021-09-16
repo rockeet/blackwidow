@@ -17,7 +17,7 @@
 #include <condition_variable>
 
 #include "src/mutex.h"
-#include "src/murmurhash.h"
+#include <zstd/common/xxhash.h>
 #include <terark/fstring.hpp>
 #include <terark/gold_hash_map.hpp>
 #include <terark/hash_strmap.hpp>
@@ -28,8 +28,18 @@ namespace blackwidow {
 // gcc-8.4 -O2 bug cause gold_hash_set fail(-O0 is ok)
 // gcc-11.2 also has bug for gold_hash_set
 // we don't use gold_hash_set, use hash_strmap instead
-#define LockMgr_USE_GOLD_HASH_SET 0
+#define LockMgr_USE_GOLD_HASH_SET 1
 using namespace terark;
+using rocksdb::Slice;
+
+struct SliceHashEqual {
+  inline size_t hash(const Slice& x) const {
+    return (size_t)XXH64(x.data_, x.size_, 202109161242ULL);
+  }
+  inline bool equal(const Slice& x, const Slice& y) const {
+    return x == y;
+  }
+};
 
 struct LockMapStripe {
   explicit LockMapStripe(const std::shared_ptr<MutexFactory>& factory) {
@@ -57,7 +67,8 @@ struct LockMapStripe {
 #if LockMgr_USE_GOLD_HASH_SET
   // gcc-8.4 -O2 bug cause gold_hash_set fail(-O0 is ok)
   // gcc-11.2 also has bug for gold_hash_set
-  gold_hash_set<fstring, fstring_func::hash_align, fstring_func::equal_align> keys;
+  //gold_hash_set<fstring, fstring_func::hash_align, fstring_func::equal_align> keys;
+  gold_hash_tab<Slice, Slice, SliceHashEqual> keys; // workaround gcc bug
 #else
   terark::hash_strmap<> keys;
 #endif
@@ -95,8 +106,7 @@ struct LockMap {
 
 size_t LockMap::GetStripe(const rocksdb::Slice& key) const {
   assert(num_stripes_ > 0);
-  static murmur_hash hash;
-  size_t stripe = hash(key) % num_stripes_;
+  size_t stripe = XXH64(key.data_, key.size_, 202109161242ULL) % num_stripes_;
   return stripe;
 }
 
