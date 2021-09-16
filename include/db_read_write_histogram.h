@@ -8,15 +8,16 @@
 #include <string>
 #include <mutex>
 #include "monitoring/histogram.h"
+#include "terark/fstring.hpp"
 
-namespace db_rw_histogram{
+namespace db_rw_histogram {
 
-enum data_type {
-  String,
-  Hash,
-  List,
-  Set,
-  Zset,
+enum redis_data_type {
+  Redis_String,
+  Redis_Hash,
+  Redis_List,
+  Redis_Set,
+  Redis_Zset,
   DBTypeMax,
 };
 
@@ -45,7 +46,7 @@ public:
   DbReadWriteHistogram(DbReadWriteHistogram &other) = delete;
   DbReadWriteHistogram(const std::string &path);
   ~DbReadWriteHistogram();
-  void Add_Histogram_Metric(const data_type type, process_type step, field_value filed, long value);
+  void Add_Histogram_Metric(const redis_data_type type, process_type step, field_value filed, long value);
   std::string get_metric();
   std::string get_html();
   void reset();
@@ -54,9 +55,9 @@ private:
   int fd;
   long get_check_sum();
   HistogramData *data;
-  std::vector<std::string> const type_str{"string","hash","list","set","zset"};  //adpater data_type
-  std::vector<std::string> const step_str{"add","del"};  //adpater process_type
-  std::vector<std::string> const field_str{"key","field","value"};  //adpater process_type
+  terark::fstring const type_str[5] = {"string","hash","list","set","zset"};  //adpater data_type
+  terark::fstring const step_str[2] = {"add","del"};  //adpater process_type
+  terark::fstring const field_str[3] = {"key","field","value"};  //adpater process_type
 };
 
 } // end db_rw_histogram

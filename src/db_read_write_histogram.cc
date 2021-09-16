@@ -11,6 +11,7 @@
 #include <iostream>
 #include <sys/stat.h>
 
+#include "terark/num_to_str.hpp"
 #include "slash/include/env.h"
 #include "db_read_write_histogram.h"
 
@@ -70,7 +71,7 @@ long DbReadWriteHistogram::get_check_sum() {
   return 0;
 }
 
-void DbReadWriteHistogram::Add_Histogram_Metric(const data_type type, process_type step, field_value field, long value) {
+void DbReadWriteHistogram::Add_Histogram_Metric(const redis_data_type type, process_type step, field_value field, long value) {
   assert(type<DBTypeMax);
   assert(step<ProcessTypeMax);
   data->HistogramTable[type][step][field].Add(value);
@@ -109,7 +110,7 @@ std::string DbReadWriteHistogram::get_metric() {
 }
 
 std::string DbReadWriteHistogram::get_html() {
-  std::ostringstream oss;
+  terark::string_appender<> oss;
   oss<<"<tr><td>";
   oss<<"<table border=1><tbody>";
   oss<<"<tr><th>type</th><th>P50</th><th>P95</th><th>P99</th><th>AVG</th><th>MIN</th><th>MAX</th><th>CNT</th><th>STD</th><th>SUM</th></tr>";

@@ -20,15 +20,15 @@
 extern db_rw_histogram::DbReadWriteHistogram* g_db_read_write_histogram;
 
 static void zset_add_histogram(size_t field_size, size_t value_size) {
-  g_db_read_write_histogram->Add_Histogram_Metric(db_rw_histogram::Zset, db_rw_histogram::Add, db_rw_histogram::Field, field_size);
-  g_db_read_write_histogram->Add_Histogram_Metric(db_rw_histogram::Zset, db_rw_histogram::Add, db_rw_histogram::Value, value_size);
+  g_db_read_write_histogram->Add_Histogram_Metric(db_rw_histogram::Redis_Zset, db_rw_histogram::Add, db_rw_histogram::Field, field_size);
+  g_db_read_write_histogram->Add_Histogram_Metric(db_rw_histogram::Redis_Zset, db_rw_histogram::Add, db_rw_histogram::Value, value_size);
 };
 static void zset_del_histogram(size_t field_size, size_t value_size) {
-  g_db_read_write_histogram->Add_Histogram_Metric(db_rw_histogram::Zset, db_rw_histogram::Del, db_rw_histogram::Field, field_size);
-  g_db_read_write_histogram->Add_Histogram_Metric(db_rw_histogram::Zset, db_rw_histogram::Del, db_rw_histogram::Value, value_size);
+  g_db_read_write_histogram->Add_Histogram_Metric(db_rw_histogram::Redis_Zset, db_rw_histogram::Del, db_rw_histogram::Field, field_size);
+  g_db_read_write_histogram->Add_Histogram_Metric(db_rw_histogram::Redis_Zset, db_rw_histogram::Del, db_rw_histogram::Value, value_size);
 };
 static void zset_key_histogram(db_rw_histogram::process_type add_del, size_t size) {
-  g_db_read_write_histogram->Add_Histogram_Metric(db_rw_histogram::Zset, add_del, db_rw_histogram::Key, size);
+  g_db_read_write_histogram->Add_Histogram_Metric(db_rw_histogram::Redis_Zset, add_del, db_rw_histogram::Key, size);
 }
 
 namespace blackwidow {
