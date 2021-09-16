@@ -29,8 +29,6 @@ void DbReadWriteHistogram::reset() {
     }
   }
 }
-// 返回值校验
-// fstat 检查长度
 // checksum 校验文件
 DbReadWriteHistogram::DbReadWriteHistogram(const std::string &path) {
   bool exist = slash::FileExists(path);
@@ -103,7 +101,6 @@ std::string DbReadWriteHistogram::get_metric() {
         oss<<"pika_db_read_write_bucket{"<<add_label()<<" le=\"+Inf\"} "<<last<<"\n";
         oss<<"pika_db_read_write_count{"<<add_label()<<"} "<<last<<"\n";
         oss<<"pika_db_read_write_sum{"<<add_label()<<"} "<<data->HistogramTable[type][step][field].sum_<<"\n";
-        //oss<<"pika_cost_time_max_bucket{"<<add_label()<<"} "<<std::to_string(bucketMapper.BucketLimit(limit))<<"\n";
       }
     }
   }

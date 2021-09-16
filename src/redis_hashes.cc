@@ -15,7 +15,6 @@
 
 extern db_rw_histogram::DbReadWriteHistogram* g_db_read_write_histogram;
 
-//只有插入新的field才执行计算
 static void hash_add_histogram(size_t field_size, size_t value_size) {
   g_db_read_write_histogram->Add_Histogram_Metric(db_rw_histogram::Hash, db_rw_histogram::Add, db_rw_histogram::Field, field_size);
   g_db_read_write_histogram->Add_Histogram_Metric(db_rw_histogram::Hash, db_rw_histogram::Add, db_rw_histogram::Value, value_size);
@@ -114,7 +113,6 @@ Status RedisHashes::GetProperty(const std::string& property, uint64_t* out) {
   return Status::OK();
 }
 
-//是否通过扫描 更新统计信息 暂时记录 后续分析
 Status RedisHashes::ScanKeyNum(KeyInfo* key_info) {
   uint64_t keys = 0;
   uint64_t expires = 0;

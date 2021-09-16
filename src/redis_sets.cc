@@ -19,13 +19,12 @@
 
 extern db_rw_histogram::DbReadWriteHistogram* g_db_read_write_histogram;
 
-//只有插入新的field才执行计算
 static void set_add_histogram(size_t field_size, size_t value_size) {
   //g_db_read_write_histogram->Add_Histogram_Metric(db_rw_histogram::List, db_rw_histogram::Add, db_rw_histogram::Field, field_size);
   g_db_read_write_histogram->Add_Histogram_Metric(db_rw_histogram::Set, db_rw_histogram::Add, db_rw_histogram::Value, value_size);
 };
 static void set_del_histogram(size_t field_size, size_t value_size) {
-  g_db_read_write_histogram->Add_Histogram_Metric(db_rw_histogram::Set, db_rw_histogram::Del, db_rw_histogram::Field, field_size);
+  //g_db_read_write_histogram->Add_Histogram_Metric(db_rw_histogram::Set, db_rw_histogram::Del, db_rw_histogram::Field, field_size);
   g_db_read_write_histogram->Add_Histogram_Metric(db_rw_histogram::Set, db_rw_histogram::Del, db_rw_histogram::Value, value_size);
 };
 static void set_key_histogram(db_rw_histogram::process_type add_del, size_t size) {
