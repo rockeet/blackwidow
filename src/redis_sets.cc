@@ -20,15 +20,15 @@
 extern length_histogram::CmdDataLengthHistogram* g_pika_cmd_data_length_histogram;
 
 static void SetAddHistogram(size_t field_size, size_t value_size) {
-  //g_pika_cmd_data_length_histogram->AddLengthMetric(length_histogram::Redis_Set, length_histogram::Add, length_histogram::Field, field_size);
-  g_pika_cmd_data_length_histogram->AddLengthMetric(length_histogram::Redis_Set, length_histogram::Add, length_histogram::Value, value_size);
+  //g_pika_cmd_data_length_histogram->AddLengthMetric(length_histogram::RedisSet, length_histogram::Add, length_histogram::Field, field_size);
+  g_pika_cmd_data_length_histogram->AddLengthMetric(length_histogram::RedisSet, length_histogram::Add, length_histogram::Value, value_size);
 };
 static void AetDelHistogram(size_t field_size, size_t value_size) {
-  //g_pika_cmd_data_length_histogram->AddLengthMetric(length_histogram::Redis_Set, length_histogram::Del, length_histogram::Field, field_size);
-  g_pika_cmd_data_length_histogram->AddLengthMetric(length_histogram::Redis_Set, length_histogram::Del, length_histogram::Value, value_size);
+  //g_pika_cmd_data_length_histogram->AddLengthMetric(length_histogram::RedisSet, length_histogram::Del, length_histogram::Field, field_size);
+  g_pika_cmd_data_length_histogram->AddLengthMetric(length_histogram::RedisSet, length_histogram::Del, length_histogram::Value, value_size);
 };
 static void SetKeyHistogram(length_histogram::ProcessType add_del, size_t size) {
-  g_pika_cmd_data_length_histogram->AddLengthMetric(length_histogram::Redis_Set, add_del, length_histogram::Key, size);
+  g_pika_cmd_data_length_histogram->AddLengthMetric(length_histogram::RedisSet, add_del, length_histogram::Key, size);
 }
 
 namespace blackwidow {

@@ -16,15 +16,15 @@
 extern length_histogram::CmdDataLengthHistogram* g_pika_cmd_data_length_histogram;
 
 static void HashFieldAddHistogram(size_t field_size, size_t value_size) {
-  g_pika_cmd_data_length_histogram->AddLengthMetric(length_histogram::Redis_Hash, length_histogram::Add, length_histogram::Field, field_size);
-  g_pika_cmd_data_length_histogram->AddLengthMetric(length_histogram::Redis_Hash, length_histogram::Add, length_histogram::Value, value_size);
+  g_pika_cmd_data_length_histogram->AddLengthMetric(length_histogram::RedisHash, length_histogram::Add, length_histogram::Field, field_size);
+  g_pika_cmd_data_length_histogram->AddLengthMetric(length_histogram::RedisHash, length_histogram::Add, length_histogram::Value, value_size);
 };
 static void HashFieldDelHistogram(size_t field_size, size_t value_size) {
-  g_pika_cmd_data_length_histogram->AddLengthMetric(length_histogram::Redis_Hash, length_histogram::Del, length_histogram::Field, field_size);
-  g_pika_cmd_data_length_histogram->AddLengthMetric(length_histogram::Redis_Hash, length_histogram::Del, length_histogram::Value, value_size);
+  g_pika_cmd_data_length_histogram->AddLengthMetric(length_histogram::RedisHash, length_histogram::Del, length_histogram::Field, field_size);
+  g_pika_cmd_data_length_histogram->AddLengthMetric(length_histogram::RedisHash, length_histogram::Del, length_histogram::Value, value_size);
 };
 static void HashKeyHistogram(length_histogram::ProcessType add_del, size_t size) {
-  g_pika_cmd_data_length_histogram->AddLengthMetric(length_histogram::Redis_Hash, add_del, length_histogram::Key, size);
+  g_pika_cmd_data_length_histogram->AddLengthMetric(length_histogram::RedisHash, add_del, length_histogram::Key, size);
 }
 static auto data_suffix_length = blackwidow::ParsedBaseMetaValue::kBaseMetaValueSuffixLength;
 

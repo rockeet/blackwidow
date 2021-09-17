@@ -13,11 +13,11 @@
 namespace length_histogram {
 
 enum RedisDataType {
-  Redis_String,
-  Redis_Hash,
-  Redis_List,
-  Redis_Set,
-  Redis_Zset,
+  RedisString,
+  RedisHash,
+  RedisList,
+  RedisSet,
+  RedisZset,
   RedisTypeMax,
 };
 
