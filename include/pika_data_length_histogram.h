@@ -10,9 +10,9 @@
 #include "monitoring/histogram.h"
 #include "terark/fstring.hpp"
 
-namespace data_length_histogram {
+namespace length_histogram {
 
-enum redis_data_type {
+enum RedisDataType {
   Redis_String,
   Redis_Hash,
   Redis_List,
@@ -21,13 +21,13 @@ enum redis_data_type {
   RedisTypeMax,
 };
 
-enum process_type {
+enum ProcessType {
   Add,
   Del,
   ProcessTypeMax,
 };
 
-enum field_value {
+enum FieldValue {
   Key,
   Field,
   Value,
@@ -45,18 +45,18 @@ public:
   CmdDataLengthHistogram(CmdDataLengthHistogram &other) = delete;
   CmdDataLengthHistogram(const std::string &path);
   ~CmdDataLengthHistogram();
-  void Add_Histogram_Metric(const redis_data_type type, process_type step, field_value filed, long value);
-  std::string get_metric();
-  std::string get_html();
-  void reset();
+  void AddLengthMetric(const RedisDataType type, ProcessType step, FieldValue filed, long value);
+  std::string GetLengthMetric();
+  std::string GetLengthHtml();
+  void Reset();
 
 private:
   int fd;
-  long get_check_sum();
+  long GetCheckSum();
   HistogramData *data;
   terark::fstring const type_str[RedisTypeMax] = {"string","hash","list","set","zset"};
   terark::fstring const step_str[ProcessTypeMax] = {"add","del"};
   terark::fstring const field_str[FieldValueMax] = {"key","field","value"};
 };
 
-} // end data_length_histogram
+} // end length_histogram

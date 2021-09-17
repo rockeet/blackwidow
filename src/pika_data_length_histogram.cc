@@ -18,11 +18,11 @@
 using std::cout;
 using std::endl;
 
-namespace data_length_histogram {
+namespace length_histogram {
 
 static const rocksdb::HistogramBucketMapper bucketMapper;
 
-void CmdDataLengthHistogram::reset() {
+void CmdDataLengthHistogram::Reset() {
   data->check_sum = 0;
   for (int i = 0; i < RedisTypeMax; i++) {
     for (int j = 0; j < ProcessTypeMax; j++) {
@@ -52,32 +52,32 @@ CmdDataLengthHistogram::CmdDataLengthHistogram(const std::string &path) {
   if (addr == MAP_FAILED) LOG(FATAL) << "CmdDataLengthHistogram mmap failed";
   data = (HistogramData*)addr;
 
-  if (exist && data->check_sum != get_check_sum()) {
+  if (exist && data->check_sum != GetCheckSum()) {
     LOG(ERROR) << "CmdDataLengthHistogram check sum failed";
   }
 
-  if (!exist) reset();
+  if (!exist) Reset();
 }
 
 CmdDataLengthHistogram::~CmdDataLengthHistogram() {
-  data->check_sum = get_check_sum();
+  data->check_sum = GetCheckSum();
   munmap((void*)data, sizeof(*data));
   data = nullptr;
   close(fd);
 }
 
-long CmdDataLengthHistogram::get_check_sum() {
+long CmdDataLengthHistogram::GetCheckSum() {
   //待实现具体内容
   return 0;
 }
 
-void CmdDataLengthHistogram::Add_Histogram_Metric(const redis_data_type type, process_type step, field_value field, long value) {
+void CmdDataLengthHistogram::AddLengthMetric(const RedisDataType type, ProcessType step, FieldValue field, long value) {
   assert(type<RedisTypeMax);
   assert(step<ProcessTypeMax);
   data->HistogramTable[type][step][field].Add(value);
 }
 
-std::string CmdDataLengthHistogram::get_metric() {
+std::string CmdDataLengthHistogram::GetLengthMetric() {
   std::ostringstream oss;
   for (int type = 0; type < RedisTypeMax; type++) {
     for(int step = 0; step < ProcessTypeMax; step++) {
@@ -109,7 +109,7 @@ std::string CmdDataLengthHistogram::get_metric() {
   return oss.str();
 }
 
-std::string CmdDataLengthHistogram::get_html() {
+std::string CmdDataLengthHistogram::GetLengthHtml() {
   terark::string_appender<> oss;
   oss<<"<tr><td>";
   oss<<"<table border=1><tbody>";
@@ -140,4 +140,4 @@ std::string CmdDataLengthHistogram::get_html() {
   return oss.str();
 }
 
-} // end data_length_histogram
+} // end length_histogram
