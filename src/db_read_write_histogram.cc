@@ -13,25 +13,25 @@
 
 #include "terark/num_to_str.hpp"
 #include "slash/include/env.h"
-#include "db_read_write_histogram.h"
+#include "pika_data_length_histogram.h"
 
 using std::cout;
 using std::endl;
 
-namespace db_rw_histogram {
+namespace data_length_histogram {
 
 static const rocksdb::HistogramBucketMapper bucketMapper;
 
-void DbReadWriteHistogram::reset() {
+void CmdDataLengthHistogram::reset() {
   data->check_sum = 0;
-  for (int i = 0; i < DBTypeMax; i++) {
+  for (int i = 0; i < RedisTypeMax; i++) {
     for (int j = 0; j < ProcessTypeMax; j++) {
       for (int k = 0; k < FieldValueMax; k++) { data->HistogramTable[i][j][k].Clear(); }
     }
   }
 }
 // checksum 校验文件
-DbReadWriteHistogram::DbReadWriteHistogram(const std::string &path) {
+CmdDataLengthHistogram::CmdDataLengthHistogram(const std::string &path) {
   bool exist = slash::FileExists(path);
   if (!exist) {
     fd = open(path.c_str(), O_RDWR|O_CREAT);
@@ -39,47 +39,47 @@ DbReadWriteHistogram::DbReadWriteHistogram(const std::string &path) {
   } else {
     fd = open(path.c_str(), O_RDWR);
   }
-  if (fd < 0) LOG(FATAL) << "DbReadWriteHistogram error fd:" << fd;
+  if (fd < 0) LOG(FATAL) << "CmdDataLengthHistogram error fd:" << fd;
 
   struct stat buf;
   int result = fstat(fd, &buf);
-  if (result != 0) LOG(FATAL) << "DbReadWriteHistogram get file size error:" << errno;
+  if (result != 0) LOG(FATAL) << "CmdDataLengthHistogram get file size error:" << errno;
   if (buf.st_size != sizeof(*data)) {
-    LOG(FATAL) << "DbReadWriteHistogram file:"<< path << " size error current:" << buf.st_size << "!=" << sizeof(*data);
+    LOG(FATAL) << "CmdDataLengthHistogram file:"<< path << " size error current:" << buf.st_size << "!=" << sizeof(*data);
   }
 
   auto addr = mmap(NULL, sizeof(*data), PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
-  if (addr == MAP_FAILED) LOG(FATAL) << "DbReadWriteHistogram mmap failed";
+  if (addr == MAP_FAILED) LOG(FATAL) << "CmdDataLengthHistogram mmap failed";
   data = (HistogramData*)addr;
 
   if (exist && data->check_sum != get_check_sum()) {
-    LOG(ERROR) << "DbReadWriteHistogram check sum failed";
+    LOG(ERROR) << "CmdDataLengthHistogram check sum failed";
   }
 
   if (!exist) reset();
 }
 
-DbReadWriteHistogram::~DbReadWriteHistogram() {
+CmdDataLengthHistogram::~CmdDataLengthHistogram() {
   data->check_sum = get_check_sum();
   munmap((void*)data, sizeof(*data));
   data = nullptr;
   close(fd);
 }
 
-long DbReadWriteHistogram::get_check_sum() {
+long CmdDataLengthHistogram::get_check_sum() {
   //待实现具体内容
   return 0;
 }
 
-void DbReadWriteHistogram::Add_Histogram_Metric(const redis_data_type type, process_type step, field_value field, long value) {
-  assert(type<DBTypeMax);
+void CmdDataLengthHistogram::Add_Histogram_Metric(const redis_data_type type, process_type step, field_value field, long value) {
+  assert(type<RedisTypeMax);
   assert(step<ProcessTypeMax);
   data->HistogramTable[type][step][field].Add(value);
 }
 
-std::string DbReadWriteHistogram::get_metric() {
+std::string CmdDataLengthHistogram::get_metric() {
   std::ostringstream oss;
-  for (int type = 0; type < DBTypeMax; type++) {
+  for (int type = 0; type < RedisTypeMax; type++) {
     for(int step = 0; step < ProcessTypeMax; step++) {
       for(int field = 0; field < FieldValueMax; field++) {
         auto &buckets =  data->HistogramTable[type][step][field].buckets_;
@@ -109,12 +109,12 @@ std::string DbReadWriteHistogram::get_metric() {
   return oss.str();
 }
 
-std::string DbReadWriteHistogram::get_html() {
+std::string CmdDataLengthHistogram::get_html() {
   terark::string_appender<> oss;
   oss<<"<tr><td>";
   oss<<"<table border=1><tbody>";
   oss<<"<tr><th>type</th><th>P50</th><th>P95</th><th>P99</th><th>AVG</th><th>MIN</th><th>MAX</th><th>CNT</th><th>STD</th><th>SUM</th></tr>";
-  for (int type = 0; type < DBTypeMax; type++) {
+  for (int type = 0; type < RedisTypeMax; type++) {
     for (int step = 0; step < ProcessTypeMax; step++) {
       for (int field = 0; field < FieldValueMax; field++) {
         auto &histogram = data->HistogramTable[type][step][field];
@@ -140,4 +140,4 @@ std::string DbReadWriteHistogram::get_html() {
   return oss.str();
 }
 
-} // end db_rw_histogram
+} // end data_length_histogram

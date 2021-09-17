@@ -15,17 +15,17 @@
 #include "src/strings_filter.h"
 #include "src/scope_record_lock.h"
 #include "src/scope_snapshot.h"
-#include "include/db_read_write_histogram.h"
+#include "include/pika_data_length_histogram.h"
 
-extern db_rw_histogram::DbReadWriteHistogram* g_db_read_write_histogram;
+extern data_length_histogram::CmdDataLengthHistogram* g_pika_cmd_data_length_histogram;
 
 static void string_add_histogram(size_t key_size, size_t value_size) {
-  g_db_read_write_histogram->Add_Histogram_Metric(db_rw_histogram::Redis_String, db_rw_histogram::Add, db_rw_histogram::Key, key_size);
-  g_db_read_write_histogram->Add_Histogram_Metric(db_rw_histogram::Redis_String, db_rw_histogram::Add, db_rw_histogram::Value, value_size);
+  g_pika_cmd_data_length_histogram->Add_Histogram_Metric(data_length_histogram::Redis_String, data_length_histogram::Add, data_length_histogram::Key, key_size);
+  g_pika_cmd_data_length_histogram->Add_Histogram_Metric(data_length_histogram::Redis_String, data_length_histogram::Add, data_length_histogram::Value, value_size);
 };
 static void string_del_histogram(size_t key_size, size_t value_size) {
-  g_db_read_write_histogram->Add_Histogram_Metric(db_rw_histogram::Redis_String, db_rw_histogram::Del, db_rw_histogram::Key, key_size);
-  g_db_read_write_histogram->Add_Histogram_Metric(db_rw_histogram::Redis_String, db_rw_histogram::Del, db_rw_histogram::Value, value_size);
+  g_pika_cmd_data_length_histogram->Add_Histogram_Metric(data_length_histogram::Redis_String, data_length_histogram::Del, data_length_histogram::Key, key_size);
+  g_pika_cmd_data_length_histogram->Add_Histogram_Metric(data_length_histogram::Redis_String, data_length_histogram::Del, data_length_histogram::Value, value_size);
 };
 
 namespace blackwidow {

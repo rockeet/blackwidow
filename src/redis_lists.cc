@@ -11,20 +11,20 @@
 #include "src/lists_filter.h"
 #include "src/scope_record_lock.h"
 #include "src/scope_snapshot.h"
-#include "include/db_read_write_histogram.h"
+#include "include/pika_data_length_histogram.h"
 
-extern db_rw_histogram::DbReadWriteHistogram* g_db_read_write_histogram;
+extern data_length_histogram::CmdDataLengthHistogram* g_pika_cmd_data_length_histogram;
 
 static void list_add_histogram(size_t field_size, size_t value_size) {
-  //g_db_read_write_histogram->Add_Histogram_Metric(db_rw_histogram::Redis_List, db_rw_histogram::Add, db_rw_histogram::Field, field_size);
-  g_db_read_write_histogram->Add_Histogram_Metric(db_rw_histogram::Redis_List, db_rw_histogram::Add, db_rw_histogram::Value, value_size);
+  //g_pika_cmd_data_length_histogram->Add_Histogram_Metric(data_length_histogram::Redis_List, data_length_histogram::Add, data_length_histogram::Field, field_size);
+  g_pika_cmd_data_length_histogram->Add_Histogram_Metric(data_length_histogram::Redis_List, data_length_histogram::Add, data_length_histogram::Value, value_size);
 };
 static void list_del_histogram(size_t field_size, size_t value_size) {
-  //g_db_read_write_histogram->Add_Histogram_Metric(db_rw_histogram::Redis_List, db_rw_histogram::Del, db_rw_histogram::Field, field_size);
-  g_db_read_write_histogram->Add_Histogram_Metric(db_rw_histogram::Redis_List, db_rw_histogram::Del, db_rw_histogram::Value, value_size);
+  //g_pika_cmd_data_length_histogram->Add_Histogram_Metric(data_length_histogram::Redis_List, data_length_histogram::Del, data_length_histogram::Field, field_size);
+  g_pika_cmd_data_length_histogram->Add_Histogram_Metric(data_length_histogram::Redis_List, data_length_histogram::Del, data_length_histogram::Value, value_size);
 };
-static void list_key_histogram(db_rw_histogram::process_type add_del, size_t size) {
-  g_db_read_write_histogram->Add_Histogram_Metric(db_rw_histogram::Redis_List, add_del, db_rw_histogram::Key, size);
+static void list_key_histogram(data_length_histogram::process_type add_del, size_t size) {
+  g_pika_cmd_data_length_histogram->Add_Histogram_Metric(data_length_histogram::Redis_List, add_del, data_length_histogram::Key, size);
 }
 
 namespace blackwidow {
@@ -210,7 +210,7 @@ Status RedisLists::PKPatternMatchDel(const std::string& pattern,
       && StringMatch(pattern.data(), pattern.size(), key.data(), key.size(), 0)) {
       parsed_lists_meta_value.InitialMetaValue();
       batch.Put(handles_[0], key, meta_value);
-      list_key_histogram(db_rw_histogram::Del, key.size());
+      list_key_histogram(data_length_histogram::Del, key.size());
       list_del_histogram(0, meta_value.size());
     }
     if (static_cast<size_t>(batch.Count()) >= BATCH_DELETE_LIMIT) {
@@ -430,7 +430,7 @@ Status RedisLists::LPop(const Slice& key, std::string* element) {
         parsed_lists_meta_value.ModifyCount(-1);
         parsed_lists_meta_value.ModifyLeftIndex(-1);
         batch.Put(handles_[0], key, meta_value);
-        if (parsed_lists_meta_value.count() == 0) list_key_histogram(db_rw_histogram::Del, key.size());
+        if (parsed_lists_meta_value.count() == 0) list_key_histogram(data_length_histogram::Del, key.size());
         list_del_histogram(0, meta_value.size());
         s = db_->Write(default_write_options_, &batch);
         UpdateSpecificKeyStatistics(key.ToString(), statistic);
@@ -484,7 +484,7 @@ Status RedisLists::LPush(const Slice& key,
       batch.Put(handles_[1], lists_data_key.Encode(), value);
       list_add_histogram(0, value.size());
     }
-    list_key_histogram(db_rw_histogram::Add, key.size());
+    list_key_histogram(data_length_histogram::Add, key.size());
     batch.Put(handles_[0], key, lists_meta_value.Encode());
     *ret = lists_meta_value.right_index() - lists_meta_value.left_index() - 1;
   } else {
@@ -699,7 +699,7 @@ Status RedisLists::LRem(const Slice& key, int64_t count,
           batch.Delete(handles_[1], lists_data_key.Encode());
           list_del_histogram(0, lists_data_key.Encode().size());
         }
-        if (parsed_lists_meta_value.count() == 0) list_key_histogram(db_rw_histogram::Del, key.size());
+        if (parsed_lists_meta_value.count() == 0) list_key_histogram(data_length_histogram::Del, key.size());
         *ret = target_index.size();
         return db_->Write(default_write_options_, &batch);
       }
@@ -770,7 +770,7 @@ Status RedisLists::LTrim(const Slice& key, int64_t start, int64_t stop) {
         || sublist_right_index < origin_left_index) {
         parsed_lists_meta_value.InitialMetaValue();
         batch.Put(handles_[0], key, meta_value);
-        list_key_histogram(db_rw_histogram::Del, key.size());
+        list_key_histogram(data_length_histogram::Del, key.size());
       } else {
         if (sublist_left_index < origin_left_index) {
           sublist_left_index = origin_left_index;
@@ -788,7 +788,7 @@ Status RedisLists::LTrim(const Slice& key, int64_t start, int64_t stop) {
             -(origin_right_index - sublist_right_index));
         parsed_lists_meta_value.ModifyCount(-delete_node_num);
         batch.Put(handles_[0], key, meta_value);
-        list_key_histogram(db_rw_histogram::Del, key.size());
+        list_key_histogram(data_length_histogram::Del, key.size());
         for (uint64_t idx = origin_left_index;
              idx < sublist_left_index;
              ++idx) {
@@ -839,7 +839,7 @@ Status RedisLists::RPop(const Slice& key, std::string* element) {
         parsed_lists_meta_value.ModifyCount(-1);
         parsed_lists_meta_value.ModifyRightIndex(-1);
         batch.Put(handles_[0], key, meta_value);
-        if (parsed_lists_meta_value.count() == 0) list_key_histogram(db_rw_histogram::Del, key.size());
+        if (parsed_lists_meta_value.count() == 0) list_key_histogram(data_length_histogram::Del, key.size());
         s = db_->Write(default_write_options_, &batch);
         UpdateSpecificKeyStatistics(key.ToString(), statistic);
         return s;
@@ -1012,7 +1012,7 @@ Status RedisLists::RPush(const Slice& key,
       list_add_histogram(0, value.size());
     }
     batch.Put(handles_[0], key, lists_meta_value.Encode());
-    list_key_histogram(db_rw_histogram::Add, key.size());
+    list_key_histogram(data_length_histogram::Add, key.size());
     *ret = lists_meta_value.right_index() - lists_meta_value.left_index() - 1;
   } else {
     return s;
@@ -1194,7 +1194,7 @@ Status RedisLists::Expire(const Slice& key, int32_t ttl) {
       s = db_->Put(default_write_options_, handles_[0], key, meta_value);
     } else {
       parsed_lists_meta_value.InitialMetaValue();
-      list_key_histogram(db_rw_histogram::Del, key.size());
+      list_key_histogram(data_length_histogram::Del, key.size());
       s = db_->Put(default_write_options_, handles_[0], key, meta_value);
     }
   }
@@ -1214,7 +1214,7 @@ Status RedisLists::Del(const Slice& key) {
     } else {
       uint32_t statistic = parsed_lists_meta_value.count();
       parsed_lists_meta_value.InitialMetaValue();
-      list_key_histogram(db_rw_histogram::Del, key.size());
+      list_key_histogram(data_length_histogram::Del, key.size());
       s = db_->Put(default_write_options_, handles_[0], key, meta_value);
       list_del_histogram(key.size(), meta_value.size());
       UpdateSpecificKeyStatistics(key.ToString(), statistic);
