@@ -19,15 +19,15 @@
 
 extern length_histogram::CmdDataLengthHistogram* g_pika_cmd_data_length_histogram;
 
-static void zset_add_histogram(size_t field_size, size_t value_size) {
+static void ZsetAddHistogram(size_t field_size, size_t value_size) {
   g_pika_cmd_data_length_histogram->AddLengthMetric(length_histogram::Redis_Zset, length_histogram::Add, length_histogram::Field, field_size);
   g_pika_cmd_data_length_histogram->AddLengthMetric(length_histogram::Redis_Zset, length_histogram::Add, length_histogram::Value, value_size);
 };
-static void zset_del_histogram(size_t field_size, size_t value_size) {
+static void ZsetDelHistogram(size_t field_size, size_t value_size) {
   g_pika_cmd_data_length_histogram->AddLengthMetric(length_histogram::Redis_Zset, length_histogram::Del, length_histogram::Field, field_size);
   g_pika_cmd_data_length_histogram->AddLengthMetric(length_histogram::Redis_Zset, length_histogram::Del, length_histogram::Value, value_size);
 };
-static void zset_key_histogram(length_histogram::ProcessType add_del, size_t size) {
+static void ZsetKeyHistogram(length_histogram::ProcessType add_del, size_t size) {
   g_pika_cmd_data_length_histogram->AddLengthMetric(length_histogram::Redis_Zset, add_del, length_histogram::Key, size);
 }
 
@@ -228,8 +228,8 @@ Status RedisZSets::PKPatternMatchDel(const std::string& pattern,
       && StringMatch(pattern.data(), pattern.size(), key.data(), key.size(), 0)) {
       parsed_zsets_meta_value.InitialMetaValue();
       batch.Put(handles_[0], key, meta_value);
-      zset_key_histogram(length_histogram::Del, key.size());
-      zset_del_histogram(0, parsed_zsets_meta_value.user_value().size());
+      ZsetKeyHistogram(length_histogram::Del, key.size());
+      ZsetDelHistogram(0, parsed_zsets_meta_value.user_value().size());
     }
     if (static_cast<size_t>(batch.Count()) >= BATCH_DELETE_LIMIT) {
       s = db_->Write(default_write_options_, &batch);
@@ -291,11 +291,11 @@ Status RedisZSets::ZPopMax(const Slice& key,
         ++del_cnt;
         batch.Delete(handles_[1], zsets_member_key.Encode());
         batch.Delete(handles_[2], iter->key());
-        zset_del_histogram(0, iter->key().size());
+        ZsetDelHistogram(0, iter->key().size());
       }
       delete iter;
       parsed_zsets_meta_value.ModifyCount(-del_cnt);
-      if (parsed_zsets_meta_value.count() == 0) zset_key_histogram(length_histogram::Del, key.size());
+      if (parsed_zsets_meta_value.count() == 0) ZsetKeyHistogram(length_histogram::Del, key.size());
       batch.Put(handles_[0], key, meta_value); 
       s = db_->Write(default_write_options_, &batch);
       UpdateSpecificKeyStatistics(key.ToString(), statistic);
@@ -342,11 +342,11 @@ Status RedisZSets::ZPopMin(const Slice& key,
         ++del_cnt;
         batch.Delete(handles_[1], zsets_member_key.Encode());
         batch.Delete(handles_[2], iter->key());
-        zset_del_histogram(0, iter->key().size());
+        ZsetDelHistogram(0, iter->key().size());
       }
       delete iter;
       parsed_zsets_meta_value.ModifyCount(-del_cnt);
-      if (parsed_zsets_meta_value.count() == 0) zset_key_histogram(length_histogram::Del, key.size());
+      if (parsed_zsets_meta_value.count() == 0) ZsetKeyHistogram(length_histogram::Del, key.size());
       batch.Put(handles_[0], key, meta_value); 
       s = db_->Write(default_write_options_, &batch);
       UpdateSpecificKeyStatistics(key.ToString(), statistic);
@@ -444,9 +444,9 @@ Status RedisZSets::ZAdd(const Slice& key,
 
       ZSetsScoreKey zsets_score_key(key, version, sm.score, sm.member);
       batch.Put(handles_[2], zsets_score_key.Encode(), Slice());
-      zset_add_histogram(0, sm.member.size());
+      ZsetAddHistogram(0, sm.member.size());
     }
-    zset_key_histogram(length_histogram::Add, key.size());
+    ZsetKeyHistogram(length_histogram::Add, key.size());
     *ret = filtered_score_members.size();
   } else {
     return s;
@@ -588,8 +588,8 @@ Status RedisZSets::ZIncrby(const Slice& key,
     ZSetsMetaValue zsets_meta_value(Slice(buf, sizeof(int32_t)));
     version = zsets_meta_value.UpdateVersion();
     batch.Put(handles_[0], key, zsets_meta_value.Encode());
-    zset_add_histogram(0, member.size());
-    zset_key_histogram(length_histogram::Add, key.size());
+    ZsetAddHistogram(0, member.size());
+    ZsetKeyHistogram(length_histogram::Add, key.size());
     score = increment;
   } else {
     return s;
@@ -821,7 +821,7 @@ Status RedisZSets::ZRem(const Slice& key,
           const void* ptr_tmp = reinterpret_cast<const void*>(&tmp);
           double score = *reinterpret_cast<const double*>(ptr_tmp);
           batch.Delete(handles_[1], zsets_member_key.Encode());
-          zset_del_histogram(0, member.size());
+          ZsetDelHistogram(0, member.size());
 
           ZSetsScoreKey zsets_score_key(key, version, score, member);
           batch.Delete(handles_[2], zsets_score_key.Encode());
@@ -831,7 +831,7 @@ Status RedisZSets::ZRem(const Slice& key,
       }
       *ret = del_cnt;
       parsed_zsets_meta_value.ModifyCount(-del_cnt);
-      if (parsed_zsets_meta_value.count() == 0) zset_key_histogram(length_histogram::Del, key.size());
+      if (parsed_zsets_meta_value.count() == 0) ZsetKeyHistogram(length_histogram::Del, key.size());
       batch.Put(handles_[0], key, meta_value);
     }
   } else {
@@ -885,7 +885,7 @@ Status RedisZSets::ZRemrangebyrank(const Slice& key,
               parsed_zsets_score_key.member());
           batch.Delete(handles_[1], zsets_member_key.Encode());
           batch.Delete(handles_[2], iter->key());
-          zset_del_histogram(0, iter->key().size());
+          ZsetDelHistogram(0, iter->key().size());
           del_cnt++;
           statistic++;
         }
@@ -893,7 +893,7 @@ Status RedisZSets::ZRemrangebyrank(const Slice& key,
       delete iter;
       *ret = del_cnt;
       parsed_zsets_meta_value.ModifyCount(-del_cnt);
-      if (parsed_zsets_meta_value.count() == 0) zset_key_histogram(length_histogram::Del, key.size());
+      if (parsed_zsets_meta_value.count() == 0) ZsetKeyHistogram(length_histogram::Del, key.size());
       batch.Put(handles_[0], key, meta_value);
     }
   } else {
@@ -957,7 +957,7 @@ Status RedisZSets::ZRemrangebyscore(const Slice& key,
               parsed_zsets_score_key.member());
           batch.Delete(handles_[1], zsets_member_key.Encode());
           batch.Delete(handles_[2], iter->key());
-          zset_del_histogram(0, iter->key().size());
+          ZsetDelHistogram(0, iter->key().size());
           del_cnt++;
           statistic++;
         }
@@ -968,7 +968,7 @@ Status RedisZSets::ZRemrangebyscore(const Slice& key,
       delete iter;
       *ret = del_cnt;
       parsed_zsets_meta_value.ModifyCount(-del_cnt);
-      if (parsed_zsets_meta_value.count() == 0) zset_key_histogram(length_histogram::Del, key.size());
+      if (parsed_zsets_meta_value.count() == 0) ZsetKeyHistogram(length_histogram::Del, key.size());
       batch.Put(handles_[0], key, meta_value);
     }
   } else {
@@ -1255,19 +1255,19 @@ Status RedisZSets::ZUnionstore(const Slice& destination,
   s = db_->Get(read_options, handles_[0], destination, &meta_value);
   if (s.ok()) {
     ParsedZSetsMetaValue parsed_zsets_meta_value(&meta_value);
-    if (parsed_zsets_meta_value.count() != 0) zset_key_histogram(length_histogram::Del, destination.size());
+    if (parsed_zsets_meta_value.count() != 0) ZsetKeyHistogram(length_histogram::Del, destination.size());
     statistic = parsed_zsets_meta_value.count();
     version = parsed_zsets_meta_value.InitialMetaValue();
     parsed_zsets_meta_value.set_count(member_score_map.size());
     batch.Put(handles_[0], destination, meta_value);
-    zset_key_histogram(length_histogram::Add, destination.size());
+    ZsetKeyHistogram(length_histogram::Add, destination.size());
   } else {
     char buf[4];
     EncodeFixed32(buf, member_score_map.size());
     ZSetsMetaValue zsets_meta_value(Slice(buf, sizeof(int32_t)));
     version = zsets_meta_value.UpdateVersion();
     batch.Put(handles_[0], destination, zsets_meta_value.Encode());
-    zset_key_histogram(length_histogram::Add, destination.size());
+    ZsetKeyHistogram(length_histogram::Add, destination.size());
   }
 
   char score_buf[8];
@@ -1388,19 +1388,19 @@ Status RedisZSets::ZInterstore(const Slice& destination,
   s = db_->Get(read_options, handles_[0], destination, &meta_value);
   if (s.ok()) {
     ParsedZSetsMetaValue parsed_zsets_meta_value(&meta_value);
-    if (parsed_zsets_meta_value.count() != 0) zset_key_histogram(length_histogram::Del, destination.size());
+    if (parsed_zsets_meta_value.count() != 0) ZsetKeyHistogram(length_histogram::Del, destination.size());
     statistic = parsed_zsets_meta_value.count();
     version = parsed_zsets_meta_value.InitialMetaValue();
     parsed_zsets_meta_value.set_count(final_score_members.size());
     batch.Put(handles_[0], destination, meta_value);
-    zset_key_histogram(length_histogram::Add, destination.size());
+    ZsetKeyHistogram(length_histogram::Add, destination.size());
   } else {
     char buf[4];
     EncodeFixed32(buf, final_score_members.size());
     ZSetsMetaValue zsets_meta_value(Slice(buf, sizeof(int32_t)));
     version = zsets_meta_value.UpdateVersion();
     batch.Put(handles_[0], destination, zsets_meta_value.Encode());
-    zset_key_histogram(length_histogram::Add, destination.size());
+    ZsetKeyHistogram(length_histogram::Add, destination.size());
   }
   char score_buf[8];
   for (const auto& sm : final_score_members) {
@@ -1551,7 +1551,7 @@ Status RedisZSets::ZRemrangebylex(const Slice& key,
           double score = *reinterpret_cast<const double*>(ptr_tmp);
           ZSetsScoreKey zsets_score_key(key, version, score, member);
           batch.Delete(handles_[2], zsets_score_key.Encode());
-          zset_del_histogram(0, member.size());
+          ZsetDelHistogram(0, member.size());
           del_cnt++;
           statistic++;
         }
@@ -1563,7 +1563,7 @@ Status RedisZSets::ZRemrangebylex(const Slice& key,
     }
     if (del_cnt > 0) {
       parsed_zsets_meta_value.ModifyCount(-del_cnt);
-      if (parsed_zsets_meta_value.count() != 0) zset_key_histogram(length_histogram::Del, key.size());
+      if (parsed_zsets_meta_value.count() != 0) ZsetKeyHistogram(length_histogram::Del, key.size());
       batch.Put(handles_[0], key, meta_value);
       *ret = del_cnt;
     }
@@ -1611,7 +1611,7 @@ Status RedisZSets::Del(const Slice& key) {
       uint32_t statistic = parsed_zsets_meta_value.count();
       parsed_zsets_meta_value.InitialMetaValue();
       s = db_->Put(default_write_options_, handles_[0], key, meta_value);
-      zset_key_histogram(length_histogram::Del, key.size());
+      ZsetKeyHistogram(length_histogram::Del, key.size());
       UpdateSpecificKeyStatistics(key.ToString(), statistic);
     }
   }
