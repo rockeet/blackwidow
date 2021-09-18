@@ -17,7 +17,7 @@
 #include "src/scope_snapshot.h"
 #include "include/pika_data_length_histogram.h"
 
-extern length_histogram::CmdDataLengthHistogram* g_pika_cmd_data_length_histogram;
+length_histogram::CmdDataLengthHistogram* g_pika_cmd_data_length_histogram = nullptr;
 
 static void StringAddHistogram(size_t key_size, size_t value_size) {
   g_pika_cmd_data_length_histogram->AddLengthMetric(length_histogram::RedisString, length_histogram::Add, length_histogram::Key, key_size);
