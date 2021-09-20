@@ -645,8 +645,15 @@ Status RedisStrings::MSet(const std::vector<KeyValue>& kvs) {
   MultiScopeRecordLock ml(lock_mgr_, keys.p, num);
   rocksdb::WriteBatch batch;
   for (const auto& kv : kvs) {
+  #if 1
+    uint32_t timestamp = 0;
+    Slice keyparts[1] = {kv.key};
+    Slice valparts[2] = {kv.value, {(const char*)&timestamp, 4}};
+    batch.Put({keyparts, 1}, rocksdb::SliceParts{valparts, 2});
+  #else
     StringsValue strings_value(kv.value);
     batch.Put(kv.key, strings_value.Encode());
+  #endif
     StringAddHistogram(kv.key.size(), kv.value.size());
   }
   return db_->Write(default_write_options_, &batch);
@@ -682,7 +689,15 @@ Status RedisStrings::Set(const Slice& key,
   StringsValue strings_value(value);
   ScopeRecordLock l(lock_mgr_, key);
   StringAddHistogram(key.size(), value.size());
+#if 1
+  rocksdb::WriteBatch batch(key.size() + value.size() + 4 + 24);
+  uint32_t timestamp = 0;
+  Slice valparts[2] = {value, {(const char*)&timestamp, 4}};
+  batch.Put({&key, 1}, rocksdb::SliceParts{valparts, 2});
+  return db_->Write(default_write_options_, &batch);
+#else
   return db_->Put(default_write_options_, key, strings_value.Encode());
+#endif
 }
 
 Status RedisStrings::Setxx(const Slice& key,
@@ -769,11 +784,23 @@ Status RedisStrings::Setex(const Slice& key, const Slice& value, int32_t ttl) {
   if (ttl <= 0) {
     return Status::InvalidArgument("invalid expire time");
   }
+#if 1
+  rocksdb::WriteBatch batch(key.size() + value.size() + 4 + 24);
+  int64_t unix_time;
+  rocksdb::Env::Default()->GetCurrentTime(&unix_time);
+  int32_t timestamp = static_cast<int32_t>(unix_time) + ttl;
+  Slice valparts[2] = {value, {(const char*)&timestamp, 4}};
+  batch.Put({&key, 1}, rocksdb::SliceParts{valparts, 2});
+  StringAddHistogram(key.size(), value.size());
+  ScopeRecordLock l(lock_mgr_, key);
+  return db_->Write(default_write_options_, &batch);
+#else
   StringsValue strings_value(value);
   strings_value.SetRelativeTimestamp(ttl);
   ScopeRecordLock l(lock_mgr_, key);
   StringAddHistogram(key.size(), value.size());
   return db_->Put(default_write_options_, key, strings_value.Encode());
+#endif
 }
 
 Status RedisStrings::Setnx(const Slice& key,
