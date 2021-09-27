@@ -22,6 +22,7 @@
 #include <terark/gold_hash_map.hpp>
 #include <terark/hash_strmap.hpp>
 #include <terark/util/function.hpp>
+#include <blackwidow/slice_hash.h>
 
 namespace blackwidow {
 
@@ -31,15 +32,6 @@ namespace blackwidow {
 #define LockMgr_USE_GOLD_HASH_SET 1
 using namespace terark;
 using rocksdb::Slice;
-
-struct SliceHashEqual {
-  inline size_t hash(const Slice& x) const {
-    return (size_t)XXH64(x.data_, x.size_, 202109161242ULL);
-  }
-  inline bool equal(const Slice& x, const Slice& y) const {
-    return x == y;
-  }
-};
 
 struct LockMapStripe {
   explicit LockMapStripe(const std::shared_ptr<MutexFactory>& factory) {

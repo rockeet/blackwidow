@@ -12,6 +12,7 @@
 #include "src/scope_record_lock.h"
 #include "src/scope_snapshot.h"
 #include "include/pika_data_length_histogram.h"
+#include "blackwidow/slice_hash.h"
 
 extern length_histogram::CmdDataLengthHistogram* g_pika_cmd_data_length_histogram;
 
@@ -617,12 +618,15 @@ Status RedisHashes::HMGet(const Slice& key,
 Status RedisHashes::HMSet(const Slice& key,
                           const std::vector<FieldValue>& fvs) {
   uint32_t statistic = 0;
-  std::unordered_set<std::string> fields;
-  std::vector<FieldValue> filtered_fvs;
-  for (auto iter = fvs.rbegin(); iter != fvs.rend(); ++iter) {
-    const std::string& field = iter->field;
-    if (fields.insert(field).second) {
-      filtered_fvs.push_back(*iter);
+  std::vector<const FieldValue*> filtered_fvs;
+  filtered_fvs.reserve(fvs.size());
+  {
+    terark::gold_hash_tab<Slice,Slice,SliceHashEqual> fields(fvs.size());
+    for (auto iter = fvs.rbegin(); iter != fvs.rend(); ++iter) {
+      const std::string& field = iter->field;
+      if (fields.insert_i(field).second) {
+        filtered_fvs.push_back(&*iter);
+      }
     }
   }
 
@@ -639,25 +643,28 @@ Status RedisHashes::HMSet(const Slice& key,
       version = parsed_hashes_meta_value.InitialMetaValue();
       parsed_hashes_meta_value.set_count(filtered_fvs.size());
       batch.Put(handles_[0], key, meta_value);
-      for (const auto& fv : filtered_fvs) {
+      for (const auto* pfv : filtered_fvs) {
+        const auto& fv = *pfv;
         HashesDataKey hashes_data_key(key, version, fv.field);
         batch.Put(handles_[1], hashes_data_key.Encode(), fv.value);
-        HashFieldAddHistogram(hashes_data_key.Encode().size(), fv.value.size());
+        HashFieldAddHistogram(fv.field.size(), fv.value.size());
       }
     } else {
       int32_t count = 0;
       std::string data_value;
       version = parsed_hashes_meta_value.version();
-      for (const auto& fv : filtered_fvs) {
+      for (const auto* pfv : filtered_fvs) {
+        const auto& fv = *pfv;
         HashesDataKey hashes_data_key(key, version, fv.field);
+        Slice encoded_data_key = hashes_data_key.Encode();
         s = db_->Get(default_read_options_, handles_[1],
-                hashes_data_key.Encode(), &data_value);
+                encoded_data_key, &data_value);
         if (s.ok()) {
           statistic++;
-          batch.Put(handles_[1], hashes_data_key.Encode(), fv.value);
+          batch.Put(handles_[1], encoded_data_key, fv.value);
         } else if (s.IsNotFound()) {
           count++;
-          batch.Put(handles_[1], hashes_data_key.Encode(), fv.value);
+          batch.Put(handles_[1], encoded_data_key, fv.value);
           HashFieldAddHistogram(fv.field.size(), fv.value.size());
         } else {
           return s;
@@ -672,7 +679,8 @@ Status RedisHashes::HMSet(const Slice& key,
     HashesMetaValue hashes_meta_value(std::string(str, sizeof(int32_t)));
     version = hashes_meta_value.UpdateVersion();
     batch.Put(handles_[0], key, hashes_meta_value.Encode());
-    for (const auto& fv : filtered_fvs) {
+    for (const auto* pfv : filtered_fvs) {
+      const auto& fv = *pfv;
       HashesDataKey hashes_data_key(key, version, fv.field);
       batch.Put(handles_[1], hashes_data_key.Encode(), fv.value);
       HashFieldAddHistogram(fv.field.size(), fv.value.size());
