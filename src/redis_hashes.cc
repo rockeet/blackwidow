@@ -607,9 +607,12 @@ Status RedisHashes::HMGet(const Slice& key,
             fields_key_ref.p, values_data.data(), status_vec.data());
       for (size_t i = 0; i < num; ++i) {
         s = std::move(status_vec[i]);
-        std::string& value = *values_data[i].GetSelf();
         if (s.ok()) {
-          vss->push_back({std::move(value), Status::OK()});
+          auto& value = values_data[i];
+          if (value.IsPinned())
+            vss->push_back({value.ToString(), Status::OK()});
+          else
+            vss->push_back({std::move(*value.GetSelf()), Status::OK()});
         } else if (s.IsNotFound()) {
           vss->push_back({std::string(), Status::NotFound()});
         } else {
