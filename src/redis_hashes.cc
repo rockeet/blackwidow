@@ -13,7 +13,10 @@
 #include "src/scope_snapshot.h"
 #include "include/pika_data_length_histogram.h"
 #include "blackwidow/slice_hash.h"
+#include <terark/valvec.hpp>
+#include <terark/util/autofree.hpp>
 
+using namespace terark;
 extern length_histogram::CmdDataLengthHistogram* g_pika_cmd_data_length_histogram;
 
 static void HashFieldAddHistogram(size_t field_size, size_t value_size) {
@@ -573,9 +576,9 @@ Status RedisHashes::HMGet(const Slice& key,
                           std::vector<ValueStatus>* vss) {
   vss->clear();
 
+  const size_t num = fields.size();
   int32_t version = 0;
   bool is_stale = false;
-  std::string value;
   std::string meta_value;
   rocksdb::ReadOptions read_options;
   const rocksdb::Snapshot* snapshot;
@@ -584,20 +587,29 @@ Status RedisHashes::HMGet(const Slice& key,
   Status s = db_->Get(read_options, handles_[0], key, &meta_value);
   if (s.ok()) {
     ParsedHashesMetaValue parsed_hashes_meta_value(&meta_value);
-    if ((is_stale = parsed_hashes_meta_value.IsStale())
-      || parsed_hashes_meta_value.count() == 0) {
-      for (size_t idx = 0; idx < fields.size(); ++idx) {
+    is_stale = parsed_hashes_meta_value.IsStale();
+    if (is_stale || parsed_hashes_meta_value.count() == 0) {
+      for (size_t idx = 0; idx < num; ++idx) {
         vss->push_back({std::string(), Status::NotFound()});
       }
       return Status::NotFound(is_stale ? "Stale" : "");
     } else {
       version = parsed_hashes_meta_value.version();
-      for (const auto& field : fields) {
-        HashesDataKey hashes_data_key(key, version, field);
-        s = db_->Get(read_options, handles_[1],
-                hashes_data_key.Encode(), &value);
+      valvec<rocksdb::PinnableSlice> values_data(num);
+      valvec<Status>         status_vec(num);
+      valvec<HashesDataKey>  fields_key_data(num, valvec_reserve());
+      AutoFree<Slice>        fields_key_ref(num);
+      for (size_t i = 0; i < num; ++i) {
+        fields_key_data.unchecked_emplace_back(key, version, fields[i]);
+        fields_key_ref.p[i] = fields_key_data[i].Encode();
+      }
+      db_->MultiGet(read_options, handles_[1], num,
+            fields_key_ref.p, values_data.data(), status_vec.data());
+      for (size_t i = 0; i < num; ++i) {
+        s = std::move(status_vec[i]);
+        std::string& value = *values_data[i].GetSelf();
         if (s.ok()) {
-          vss->push_back({value, Status::OK()});
+          vss->push_back({std::move(value), Status::OK()});
         } else if (s.IsNotFound()) {
           vss->push_back({std::string(), Status::NotFound()});
         } else {
@@ -608,7 +620,7 @@ Status RedisHashes::HMGet(const Slice& key,
     }
     return Status::OK();
   } else if (s.IsNotFound()) {
-    for (size_t idx = 0; idx < fields.size(); ++idx) {
+    for (size_t idx = 0; idx < num; ++idx) {
       vss->push_back({std::string(), Status::NotFound()});
     }
   }
@@ -629,6 +641,7 @@ Status RedisHashes::HMSet(const Slice& key,
       }
     }
   }
+  const size_t num = filtered_fvs.size();
 
   rocksdb::WriteBatch batch;
   ScopeRecordLock l(lock_mgr_, key);
@@ -651,14 +664,22 @@ Status RedisHashes::HMSet(const Slice& key,
       }
     } else {
       int32_t count = 0;
-      std::string data_value;
       version = parsed_hashes_meta_value.version();
-      for (const auto* pfv : filtered_fvs) {
-        const auto& fv = *pfv;
-        HashesDataKey hashes_data_key(key, version, fv.field);
-        Slice encoded_data_key = hashes_data_key.Encode();
-        s = db_->Get(default_read_options_, handles_[1],
-                encoded_data_key, &data_value);
+      valvec<rocksdb::PinnableSlice> values_data(num);
+      valvec<Status>         status_vec(num);
+      valvec<HashesDataKey>  fields_key_data(num, valvec_reserve());
+      AutoFree<Slice>        fields_key_ref(num);
+      for (size_t i = 0; i < num; ++i) {
+        const auto& fv = *filtered_fvs[i];
+        fields_key_data.unchecked_emplace_back(key, version, fv.field);
+        fields_key_ref.p[i] = fields_key_data[i].Encode();
+      }
+      db_->MultiGet(default_read_options_, handles_[1], num,
+            fields_key_ref.p, values_data.data(), status_vec.data());
+      for (size_t i = 0; i < num; ++i) {
+        const auto& fv = *filtered_fvs[i];
+        const Slice& encoded_data_key = fields_key_ref.p[i];
+        s = std::move(status_vec[i]);
         if (s.ok()) {
           statistic++;
           batch.Put(handles_[1], encoded_data_key, fv.value);
