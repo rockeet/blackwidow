@@ -671,12 +671,19 @@ Status RedisStrings::MSetnx(const std::vector<KeyValue>& kvs,
   Status s;
   bool exists = false;
   *ret = 0;
-  std::string value;
-  for (size_t i = 0; i < kvs.size(); i++) {
-    s = db_->Get(default_read_options_, kvs[i].key, &value);
-    if (s.ok()) {
-      ParsedStringsValue parsed_strings_value(&value);
-      if (!parsed_strings_value.IsStale()) {
+  const size_t num = kvs.size();
+  AutoFree<Slice>       ks(num);
+  valvec<PinnableSlice> ps(num);
+  valvec<Status>        ss(num);
+  for (size_t i = 0; i < num; ++i) ks.p[i] = kvs[i].key;
+  auto cfh = db_->DefaultColumnFamily();
+  ReadOptionsAutoSnapshot read_options(db_);
+  db_->MultiGet(read_options, cfh, num, ks.p, ps.data(), ss.data());
+  time_t now_time = ::time(nullptr);
+  for (size_t i = 0; i < num; ++i) {
+    if (ss[i].ok()) {
+      time_t timestamp = DecodeFixed32(ps[i].end()-4);
+      if (timestamp >= now_time) {
         exists = true;
         break;
       }
