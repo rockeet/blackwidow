@@ -123,10 +123,7 @@ Status RedisHashes::ScanKeyNum(KeyInfo* key_info) {
   uint64_t ttl_sum = 0;
   uint64_t invaild_keys = 0;
 
-  rocksdb::ReadOptions iterator_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  iterator_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot iterator_options(db_);
   iterator_options.fill_cache = false;
 
   int64_t curtime;
@@ -160,10 +157,7 @@ Status RedisHashes::ScanKeyNum(KeyInfo* key_info) {
 Status RedisHashes::ScanKeys(const std::string& pattern,
                              std::vector<std::string>* keys) {
   std::string key;
-  rocksdb::ReadOptions iterator_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  iterator_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot iterator_options(db_);
   iterator_options.fill_cache = false;
 
   rocksdb::Iterator* iter = db_->NewIterator(iterator_options, handles_[0]);
@@ -186,10 +180,7 @@ Status RedisHashes::ScanKeys(const std::string& pattern,
 
 Status RedisHashes::PKPatternMatchDel(const std::string& pattern,
                                       int32_t* ret) {
-  rocksdb::ReadOptions iterator_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  iterator_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot iterator_options(db_);
   iterator_options.fill_cache = false;
 
   std::string key;
@@ -249,15 +240,12 @@ Status RedisHashes::HDel(const Slice& key,
   }
 
   rocksdb::WriteBatch batch;
-  rocksdb::ReadOptions read_options;
-  const rocksdb::Snapshot* snapshot;
+  ReadOptionsAutoSnapshot read_options(db_);
 
   std::string meta_value;
   int32_t del_cnt = 0;
   int32_t version = 0;
   ScopeRecordLock l(lock_mgr_, key);
-  ScopeSnapshot ss(db_, &snapshot);
-  read_options.snapshot = snapshot;
   Status s = db_->Get(read_options, handles_[0], key, &meta_value);
   if (s.ok()) {
     ParsedHashesMetaValue parsed_hashes_meta_value(&meta_value);
@@ -308,10 +296,7 @@ Status RedisHashes::HGet(const Slice& key, const Slice& field,
                          std::string* value) {
   std::string meta_value;
   int32_t version = 0;
-  rocksdb::ReadOptions read_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  read_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot read_options(db_);
   Status s = db_->Get(read_options, handles_[0], key, &meta_value);
   if (s.ok()) {
     ParsedHashesMetaValue parsed_hashes_meta_value(&meta_value);
@@ -330,13 +315,10 @@ Status RedisHashes::HGet(const Slice& key, const Slice& field,
 
 Status RedisHashes::HGetall(const Slice& key,
                             std::vector<FieldValue>* fvs) {
-  rocksdb::ReadOptions read_options;
-  const rocksdb::Snapshot* snapshot;
+  ReadOptionsAutoSnapshot read_options(db_);
 
   std::string meta_value;
   int32_t version = 0;
-  ScopeSnapshot ss(db_, &snapshot);
-  read_options.snapshot = snapshot;
   Status s = db_->Get(read_options, handles_[0], key, &meta_value);
   if (s.ok()) {
     ParsedHashesMetaValue parsed_hashes_meta_value(&meta_value);
@@ -519,13 +501,9 @@ Status RedisHashes::HIncrbyfloat(const Slice& key, const Slice& field,
 
 Status RedisHashes::HKeys(const Slice& key,
                           std::vector<std::string>* fields) {
-  rocksdb::ReadOptions read_options;
-  const rocksdb::Snapshot* snapshot;
-
+  ReadOptionsAutoSnapshot read_options(db_);
   std::string meta_value;
   int32_t version = 0;
-  ScopeSnapshot ss(db_, &snapshot);
-  read_options.snapshot = snapshot;
   Status s = db_->Get(read_options, handles_[0], key, &meta_value);
   if (s.ok()) {
     ParsedHashesMetaValue parsed_hashes_meta_value(&meta_value);
@@ -580,10 +558,7 @@ Status RedisHashes::HMGet(const Slice& key,
   int32_t version = 0;
   bool is_stale = false;
   std::string meta_value;
-  rocksdb::ReadOptions read_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  read_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot read_options(db_);
   Status s = db_->Get(read_options, handles_[0], key, &meta_value);
   if (s.ok()) {
     ParsedHashesMetaValue parsed_hashes_meta_value(&meta_value);
@@ -832,13 +807,9 @@ Status RedisHashes::HSetnx(const Slice& key, const Slice& field,
 
 Status RedisHashes::HVals(const Slice& key,
                           std::vector<std::string>* values) {
-  rocksdb::ReadOptions read_options;
-  const rocksdb::Snapshot* snapshot;
-
+  ReadOptionsAutoSnapshot read_options(db_);
   std::string meta_value;
   int32_t version = 0;
-  ScopeSnapshot ss(db_, &snapshot);
-  read_options.snapshot = snapshot;
   Status s = db_->Get(read_options, handles_[0], key, &meta_value);
   if (s.ok()) {
     ParsedHashesMetaValue parsed_hashes_meta_value(&meta_value);
@@ -889,12 +860,8 @@ Status RedisHashes::HScan(const Slice& key,
 
   int64_t rest = count;
   int64_t step_length = count;
-  rocksdb::ReadOptions read_options;
-  const rocksdb::Snapshot* snapshot;
-
+  ReadOptionsAutoSnapshot read_options(db_);
   std::string meta_value;
-  ScopeSnapshot ss(db_, &snapshot);
-  read_options.snapshot = snapshot;
   Status s = db_->Get(read_options, handles_[0], key, &meta_value);
   if (s.ok()) {
     ParsedHashesMetaValue parsed_hashes_meta_value(&meta_value);
@@ -963,10 +930,7 @@ Status RedisHashes::HScanx(const Slice& key,
 
   int64_t rest = count;
   std::string meta_value;
-  rocksdb::ReadOptions read_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  read_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot read_options(db_);
   Status s = db_->Get(read_options, handles_[0], key, &meta_value);
   if (s.ok()) {
     ParsedHashesMetaValue parsed_hashes_meta_value(&meta_value);
@@ -1020,11 +984,7 @@ Status RedisHashes::PKHScanRange(const Slice& key,
 
   int64_t remain = limit;
   std::string meta_value;
-  rocksdb::ReadOptions read_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  read_options.snapshot = snapshot;
-
+  ReadOptionsAutoSnapshot read_options(db_);
   bool start_no_limit = !field_start.compare("");
   bool end_no_limit = !field_end.compare("");
 
@@ -1089,11 +1049,7 @@ Status RedisHashes::PKHRScanRange(const Slice& key,
 
   int64_t remain = limit;
   std::string meta_value;
-  rocksdb::ReadOptions read_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  read_options.snapshot = snapshot;
-
+  ReadOptionsAutoSnapshot read_options(db_);
   bool start_no_limit = !field_start.compare("");
   bool end_no_limit = !field_end.compare("");
 
@@ -1160,10 +1116,7 @@ Status RedisHashes::PKScanRange(const Slice& key_start,
 
   std::string key;
   int32_t remain = limit;
-  rocksdb::ReadOptions iterator_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  iterator_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot iterator_options(db_);
   iterator_options.fill_cache = false;
 
   bool start_no_limit = !key_start.compare("");
@@ -1224,10 +1177,7 @@ Status RedisHashes::PKRScanRange(const Slice& key_start,
 
   std::string key;
   int32_t remain = limit;
-  rocksdb::ReadOptions iterator_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  iterator_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot iterator_options(db_);
   iterator_options.fill_cache = false;
 
   bool start_no_limit = !key_start.compare("");
@@ -1332,10 +1282,7 @@ bool RedisHashes::Scan(const std::string& start_key,
                        std::string* next_key) {
   std::string meta_key;
   bool is_finish = true;
-  rocksdb::ReadOptions iterator_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  iterator_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot iterator_options(db_);
   iterator_options.fill_cache = false;
 
   rocksdb::Iterator* it = db_->NewIterator(iterator_options, handles_[0]);
@@ -1377,10 +1324,7 @@ bool RedisHashes::PKExpireScan(const std::string& start_key,
                                int64_t* leftover_visits,
                                std::string* next_key) {
   bool is_finish = true;
-  rocksdb::ReadOptions iterator_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  iterator_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot iterator_options(db_);
   iterator_options.fill_cache = false;
 
   rocksdb::Iterator* it = db_->NewIterator(iterator_options, handles_[0]);
@@ -1484,10 +1428,7 @@ Status RedisHashes::TTL(const Slice& key, int64_t* timestamp) {
 }
 
 void RedisHashes::ScanDatabase() {
-  rocksdb::ReadOptions iterator_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  iterator_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot iterator_options(db_);
   iterator_options.fill_cache = false;
   int32_t current_time = time(NULL);
 

@@ -124,10 +124,7 @@ Status RedisSets::ScanKeyNum(KeyInfo* key_info) {
   uint64_t ttl_sum = 0;
   uint64_t invaild_keys = 0;
 
-  rocksdb::ReadOptions iterator_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  iterator_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot iterator_options(db_);
   iterator_options.fill_cache = false;
 
   int64_t curtime;
@@ -161,10 +158,7 @@ Status RedisSets::ScanKeyNum(KeyInfo* key_info) {
 Status RedisSets::ScanKeys(const std::string& pattern,
                              std::vector<std::string>* keys) {
   std::string key;
-  rocksdb::ReadOptions iterator_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  iterator_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot iterator_options(db_);
   iterator_options.fill_cache = false;
 
   rocksdb::Iterator* iter = db_->NewIterator(iterator_options, handles_[0]);
@@ -187,10 +181,7 @@ Status RedisSets::ScanKeys(const std::string& pattern,
 
 Status RedisSets::PKPatternMatchDel(const std::string& pattern,
                                     int32_t* ret) {
-  rocksdb::ReadOptions iterator_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  iterator_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot iterator_options(db_);
   iterator_options.fill_cache = false;
 
   std::string key;
@@ -332,13 +323,9 @@ Status RedisSets::SDiff(const std::vector<std::string>& keys,
     return Status::Corruption("SDiff invalid parameter, no keys");
   }
 
-  rocksdb::ReadOptions read_options;
-  const rocksdb::Snapshot* snapshot;
-
+  ReadOptionsAutoSnapshot read_options(db_);
   std::string meta_value;
   int32_t version = 0;
-  ScopeSnapshot ss(db_, &snapshot);
-  read_options.snapshot = snapshot;
   std::vector<KeyVersion> vaild_sets;
   Status s;
 
@@ -408,14 +395,10 @@ Status RedisSets::SDiffstore(const Slice& destination,
   }
 
   rocksdb::WriteBatch batch;
-  rocksdb::ReadOptions read_options;
-  const rocksdb::Snapshot* snapshot;
-
+  ReadOptionsAutoSnapshot read_options(db_);
   std::string meta_value;
   int32_t version = 0;
   ScopeRecordLock l(lock_mgr_, destination);
-  ScopeSnapshot ss(db_, &snapshot);
-  read_options.snapshot = snapshot;
   std::vector<KeyVersion> vaild_sets;
   Status s;
 
@@ -512,13 +495,9 @@ Status RedisSets::SInter(const std::vector<std::string>& keys,
     return Status::Corruption("SInter invalid parameter, no keys");
   }
 
-  rocksdb::ReadOptions read_options;
-  const rocksdb::Snapshot* snapshot;
-
+  ReadOptionsAutoSnapshot read_options(db_);
   std::string meta_value;
   int32_t version = 0;
-  ScopeSnapshot ss(db_, &snapshot);
-  read_options.snapshot = snapshot;
   std::vector<KeyVersion> vaild_sets;
   Status s;
 
@@ -597,15 +576,11 @@ Status RedisSets::SInterstore(const Slice& destination,
   }
 
   rocksdb::WriteBatch batch;
-  rocksdb::ReadOptions read_options;
-  const rocksdb::Snapshot* snapshot;
-
+  ReadOptionsAutoSnapshot read_options(db_);
   std::string meta_value;
   int32_t version = 0;
   bool have_invalid_sets = false;
   ScopeRecordLock l(lock_mgr_, destination);
-  ScopeSnapshot ss(db_, &snapshot);
-  read_options.snapshot = snapshot;
   std::vector<KeyVersion> vaild_sets;
   Status s;
 
@@ -712,13 +687,9 @@ Status RedisSets::SInterstore(const Slice& destination,
 Status RedisSets::SIsmember(const Slice& key, const Slice& member,
                             int32_t* ret) {
   *ret = 0;
-  rocksdb::ReadOptions read_options;
-  const rocksdb::Snapshot* snapshot;
-
+  ReadOptionsAutoSnapshot read_options(db_);
   std::string meta_value;
   int32_t version = 0;
-  ScopeSnapshot ss(db_, &snapshot);
-  read_options.snapshot = snapshot;
   Status s = db_->Get(read_options, handles_[0], key, &meta_value);
   if (s.ok()) {
     ParsedSetsMetaValue parsed_sets_meta_value(&meta_value);
@@ -742,13 +713,9 @@ Status RedisSets::SIsmember(const Slice& key, const Slice& member,
 
 Status RedisSets::SMembers(const Slice& key,
                            std::vector<std::string>* members) {
-  rocksdb::ReadOptions read_options;
-  const rocksdb::Snapshot* snapshot;
-
+  ReadOptionsAutoSnapshot read_options(db_);
   std::string meta_value;
   int32_t version = 0;
-  ScopeSnapshot ss(db_, &snapshot);
-  read_options.snapshot = snapshot;
   Status s = db_->Get(read_options, handles_[0], key, &meta_value);
   if (s.ok()) {
     ParsedSetsMetaValue parsed_sets_meta_value(&meta_value);
@@ -1064,12 +1031,8 @@ Status RedisSets::SUnion(const std::vector<std::string>& keys,
     return Status::Corruption("SUnion invalid parameter, no keys");
   }
 
-  rocksdb::ReadOptions read_options;
-  const rocksdb::Snapshot* snapshot;
-
+  ReadOptionsAutoSnapshot read_options(db_);
   std::string meta_value;
-  ScopeSnapshot ss(db_, &snapshot);
-  read_options.snapshot = snapshot;
   std::vector<KeyVersion> vaild_sets;
   Status s;
 
@@ -1116,14 +1079,10 @@ Status RedisSets::SUnionstore(const Slice& destination,
   }
 
   rocksdb::WriteBatch batch;
-  rocksdb::ReadOptions read_options;
-  const rocksdb::Snapshot* snapshot;
-
+  ReadOptionsAutoSnapshot read_options(db_);
   std::string meta_value;
   int32_t version = 0;
   ScopeRecordLock l(lock_mgr_, destination);
-  ScopeSnapshot ss(db_, &snapshot);
-  read_options.snapshot = snapshot;
   std::vector<KeyVersion> vaild_sets;
   Status s;
 
@@ -1207,12 +1166,8 @@ Status RedisSets::SScan(const Slice& key,
 
   int64_t rest = count;
   int64_t step_length = count;
-  rocksdb::ReadOptions read_options;
-  const rocksdb::Snapshot* snapshot;
-
+  ReadOptionsAutoSnapshot read_options(db_);
   std::string meta_value;
-  ScopeSnapshot ss(db_, &snapshot);
-  read_options.snapshot = snapshot;
   Status s = db_->Get(read_options, handles_[0], key, &meta_value);
   if (s.ok()) {
     ParsedSetsMetaValue parsed_sets_meta_value(&meta_value);
@@ -1281,10 +1236,7 @@ Status RedisSets::PKScanRange(const Slice& key_start,
 
   std::string key;
   int32_t remain = limit;
-  rocksdb::ReadOptions iterator_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  iterator_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot iterator_options(db_);
   iterator_options.fill_cache = false;
 
   bool start_no_limit = !key_start.compare("");
@@ -1345,10 +1297,7 @@ Status RedisSets::PKRScanRange(const Slice& key_start,
 
   std::string key;
   int32_t remain = limit;
-  rocksdb::ReadOptions iterator_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  iterator_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot iterator_options(db_);
   iterator_options.fill_cache = false;
 
   bool start_no_limit = !key_start.compare("");
@@ -1452,10 +1401,7 @@ bool RedisSets::Scan(const std::string& start_key,
                      std::string* next_key) {
   std::string meta_key;
   bool is_finish = true;
-  rocksdb::ReadOptions iterator_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  iterator_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot iterator_options(db_);
   iterator_options.fill_cache = false;
 
   rocksdb::Iterator* it = db_->NewIterator(iterator_options, handles_[0]);
@@ -1497,10 +1443,7 @@ bool RedisSets::PKExpireScan(const std::string& start_key,
                              int64_t* leftover_visits,
                              std::string* next_key) {
   bool is_finish = true;
-  rocksdb::ReadOptions iterator_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  iterator_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot iterator_options(db_);
   iterator_options.fill_cache = false;
 
   rocksdb::Iterator* it = db_->NewIterator(iterator_options, handles_[0]);
@@ -1604,10 +1547,7 @@ Status RedisSets::TTL(const Slice& key, int64_t* timestamp) {
 }
 
 void RedisSets::ScanDatabase() {
-  rocksdb::ReadOptions iterator_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  iterator_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot iterator_options(db_);
   iterator_options.fill_cache = false;
   int32_t current_time = time(NULL);
 

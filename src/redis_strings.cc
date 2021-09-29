@@ -77,10 +77,7 @@ Status RedisStrings::ScanKeyNum(KeyInfo* key_info) {
   uint64_t ttl_sum = 0;
   uint64_t invaild_keys = 0;
 
-  rocksdb::ReadOptions iterator_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  iterator_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot iterator_options(db_);
   iterator_options.fill_cache = false;
 
   int64_t curtime;
@@ -115,10 +112,7 @@ Status RedisStrings::ScanKeyNum(KeyInfo* key_info) {
 Status RedisStrings::ScanKeys(const std::string& pattern,
                               std::vector<std::string>* keys) {
   std::string key;
-  rocksdb::ReadOptions iterator_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  iterator_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot iterator_options(db_);
   iterator_options.fill_cache = false;
 
   // Note: This is a string type and does not need to pass the column family as
@@ -142,10 +136,7 @@ Status RedisStrings::ScanKeys(const std::string& pattern,
 
 Status RedisStrings::PKPatternMatchDel(const std::string& pattern,
                                        int32_t* ret) {
-  rocksdb::ReadOptions iterator_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  iterator_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot iterator_options(db_);
   iterator_options.fill_cache = false;
 
   std::string key;
@@ -1185,10 +1176,7 @@ Status RedisStrings::PKScanRange(const Slice& key_start,
 
   std::string key, value;
   int32_t remain = limit;
-  rocksdb::ReadOptions iterator_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  iterator_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot iterator_options(db_);
   iterator_options.fill_cache = false;
 
   bool start_no_limit = !key_start.compare("");
@@ -1248,10 +1236,7 @@ Status RedisStrings::PKRScanRange(const Slice& key_start,
                                   std::string* next_key) {
   std::string key, value;
   int32_t remain = limit;
-  rocksdb::ReadOptions iterator_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  iterator_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot iterator_options(db_);
   iterator_options.fill_cache = false;
 
   bool start_no_limit = !key_start.compare("");
@@ -1345,10 +1330,7 @@ bool RedisStrings::Scan(const std::string& start_key,
                         std::string* next_key) {
   std::string key;
   bool is_finish = true;
-  rocksdb::ReadOptions iterator_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  iterator_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot iterator_options(db_);
   iterator_options.fill_cache = false;
 
   // Note: This is a string type and does not need to pass the column family as
@@ -1391,10 +1373,7 @@ bool RedisStrings::PKExpireScan(const std::string& start_key,
                                 int64_t* leftover_visits,
                                 std::string* next_key) {
   bool is_finish = true;
-  rocksdb::ReadOptions iterator_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  iterator_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot iterator_options(db_);
   iterator_options.fill_cache = false;
 
   rocksdb::Iterator* it = db_->NewIterator(iterator_options);
@@ -1491,10 +1470,7 @@ Status RedisStrings::TTL(const Slice& key, int64_t* timestamp) {
 }
 
 void RedisStrings::ScanDatabase() {
-  rocksdb::ReadOptions iterator_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  iterator_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot iterator_options(db_);
   iterator_options.fill_cache = false;
   int32_t current_time = time(NULL);
 

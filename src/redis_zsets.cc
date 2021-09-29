@@ -143,10 +143,7 @@ Status RedisZSets::ScanKeyNum(KeyInfo* key_info) {
   uint64_t ttl_sum = 0;
   uint64_t invaild_keys = 0;
 
-  rocksdb::ReadOptions iterator_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  iterator_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot iterator_options(db_);
   iterator_options.fill_cache = false;
 
   int64_t curtime;
@@ -180,10 +177,7 @@ Status RedisZSets::ScanKeyNum(KeyInfo* key_info) {
 Status RedisZSets::ScanKeys(const std::string& pattern,
                             std::vector<std::string>* keys) {
   std::string key;
-  rocksdb::ReadOptions iterator_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  iterator_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot iterator_options(db_);
   iterator_options.fill_cache = false;
 
   rocksdb::Iterator* iter = db_->NewIterator(iterator_options, handles_[0]);
@@ -206,10 +200,7 @@ Status RedisZSets::ScanKeys(const std::string& pattern,
 
 Status RedisZSets::PKPatternMatchDel(const std::string& pattern,
                                      int32_t* ret) {
-  rocksdb::ReadOptions iterator_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  iterator_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot iterator_options(db_);
   iterator_options.fill_cache = false;
 
   std::string key;
@@ -255,7 +246,7 @@ Status RedisZSets::PKPatternMatchDel(const std::string& pattern,
   return s;
 }
 
-Status RedisZSets::ZPopMax(const Slice& key, 
+Status RedisZSets::ZPopMax(const Slice& key,
                            const int64_t count,
                            std::vector<ScoreMember>* score_members) {
   uint32_t statistic = 0;
@@ -284,7 +275,7 @@ Status RedisZSets::ZPopMax(const Slice& key,
            iter->Prev()) {
         ParsedZSetsScoreKey parsed_zsets_score_key(iter->key(), &parse_key_buf);
         score_members->emplace_back(
-                       ScoreMember{parsed_zsets_score_key.score(), 
+                       ScoreMember{parsed_zsets_score_key.score(),
                                    parsed_zsets_score_key.member().ToString()});
         ZSetsMemberKey zsets_member_key(key, version, parsed_zsets_score_key.member());
         ++statistic;
@@ -296,17 +287,17 @@ Status RedisZSets::ZPopMax(const Slice& key,
       delete iter;
       parsed_zsets_meta_value.ModifyCount(-del_cnt);
       if (parsed_zsets_meta_value.count() == 0) ZsetKeyHistogram(length_histogram::Del, key.size());
-      batch.Put(handles_[0], key, meta_value); 
+      batch.Put(handles_[0], key, meta_value);
       s = db_->Write(default_write_options_, &batch);
       UpdateSpecificKeyStatistics(key.ToString(), statistic);
       return s;
-    }    
+    }
   } else {
     return s;
-  } 
+  }
 }
 
-Status RedisZSets::ZPopMin(const Slice& key, 
+Status RedisZSets::ZPopMin(const Slice& key,
                            const int64_t count,
                            std::vector<ScoreMember>* score_members) {
   uint32_t statistic = 0;
@@ -347,14 +338,14 @@ Status RedisZSets::ZPopMin(const Slice& key,
       delete iter;
       parsed_zsets_meta_value.ModifyCount(-del_cnt);
       if (parsed_zsets_meta_value.count() == 0) ZsetKeyHistogram(length_histogram::Del, key.size());
-      batch.Put(handles_[0], key, meta_value); 
+      batch.Put(handles_[0], key, meta_value);
       s = db_->Write(default_write_options_, &batch);
       UpdateSpecificKeyStatistics(key.ToString(), statistic);
       return s;
-    }    
+    }
   } else {
     return s;
-  } 
+  }
 }
 
 Status RedisZSets::ZAdd(const Slice& key,
@@ -484,13 +475,8 @@ Status RedisZSets::ZCount(const Slice& key,
                           bool right_close,
                           int32_t* ret) {
   *ret = 0;
-  rocksdb::ReadOptions read_options;
-  const rocksdb::Snapshot* snapshot = nullptr;
-
+  ReadOptionsAutoSnapshot read_options(db_);
   std::string meta_value;
-  ScopeSnapshot ss(db_, &snapshot);
-  read_options.snapshot = snapshot;
-
   Status s = db_->Get(read_options, key, &meta_value);
   if (s.ok()) {
     ParsedZSetsMetaValue parsed_zsets_meta_value(&meta_value);
@@ -613,13 +599,8 @@ Status RedisZSets::ZRange(const Slice& key,
                           int32_t stop,
                           std::vector<ScoreMember>* score_members) {
   score_members->clear();
-  rocksdb::ReadOptions read_options;
-  const rocksdb::Snapshot* snapshot = nullptr;
-
+  ReadOptionsAutoSnapshot read_options(db_);
   std::string meta_value;
-  ScopeSnapshot ss(db_, &snapshot);
-  read_options.snapshot = snapshot;
-
   Status s = db_->Get(read_options, key, &meta_value);
   if (s.ok()) {
     ParsedZSetsMetaValue parsed_zsets_meta_value(&meta_value);
@@ -670,12 +651,8 @@ Status RedisZSets::ZRangebyscore(const Slice& key,
                                  int64_t offset,
                                  std::vector<ScoreMember>* score_members) {
   score_members->clear();
-  rocksdb::ReadOptions read_options;
-  const rocksdb::Snapshot* snapshot = nullptr;
-
+  ReadOptionsAutoSnapshot read_options(db_);
   std::string meta_value;
-  ScopeSnapshot ss(db_, &snapshot);
-  read_options.snapshot = snapshot;
   Status s = db_->Get(read_options, handles_[0], key, &meta_value);
   if (s.ok()) {
     ParsedZSetsMetaValue parsed_zsets_meta_value(&meta_value);
@@ -739,12 +716,8 @@ Status RedisZSets::ZRank(const Slice& key,
                          const Slice& member,
                          int32_t* rank) {
   *rank = -1;
-  rocksdb::ReadOptions read_options;
-  const rocksdb::Snapshot* snapshot = nullptr;
-
+  ReadOptionsAutoSnapshot read_options(db_);
   std::string meta_value;
-  ScopeSnapshot ss(db_, &snapshot);
-  read_options.snapshot = snapshot;
   Status s = db_->Get(read_options, handles_[0], key, &meta_value);
   if (s.ok()) {
     ParsedZSetsMetaValue  parsed_zsets_meta_value(&meta_value);
@@ -984,12 +957,8 @@ Status RedisZSets::ZRevrange(const Slice& key,
                              int32_t stop,
                              std::vector<ScoreMember>* score_members) {
   score_members->clear();
-  rocksdb::ReadOptions read_options;
-  const rocksdb::Snapshot* snapshot = nullptr;
-
+  ReadOptionsAutoSnapshot read_options(db_);
   std::string meta_value;
-  ScopeSnapshot ss(db_, &snapshot);
-  read_options.snapshot = snapshot;
 
   Status s = db_->Get(read_options, key, &meta_value);
   if (s.ok()) {
@@ -1041,12 +1010,8 @@ Status RedisZSets::ZRevrangebyscore(const Slice& key,
                                     int64_t offset,
                                     std::vector<ScoreMember>* score_members) {
   score_members->clear();
-  rocksdb::ReadOptions read_options;
-  const rocksdb::Snapshot* snapshot = nullptr;
-
+  ReadOptionsAutoSnapshot read_options(db_);
   std::string meta_value;
-  ScopeSnapshot ss(db_, &snapshot);
-  read_options.snapshot = snapshot;
   Status s = db_->Get(read_options, handles_[0], key, &meta_value);
   if (s.ok()) {
     ParsedZSetsMetaValue parsed_zsets_meta_value(&meta_value);
@@ -1110,12 +1075,8 @@ Status RedisZSets::ZRevrank(const Slice& key,
                             const Slice& member,
                             int32_t* rank) {
   *rank = -1;
-  rocksdb::ReadOptions read_options;
-  const rocksdb::Snapshot* snapshot = nullptr;
-
+  ReadOptionsAutoSnapshot read_options(db_);
   std::string meta_value;
-  ScopeSnapshot ss(db_, &snapshot);
-  read_options.snapshot = snapshot;
 
   Status s = db_->Get(read_options, key, &meta_value);
   if (s.ok()) {
@@ -1157,12 +1118,8 @@ Status RedisZSets::ZScore(const Slice& key,
                           const Slice& member,
                           double* score) {
   *score = 0;
-  rocksdb::ReadOptions read_options;
-  const rocksdb::Snapshot* snapshot = nullptr;
-
+  ReadOptionsAutoSnapshot read_options(db_);
   std::string meta_value;
-  ScopeSnapshot ss(db_, &snapshot);
-  read_options.snapshot = snapshot;
 
   Status s = db_->Get(read_options, key, &meta_value);
   if (s.ok()) {
@@ -1199,14 +1156,10 @@ Status RedisZSets::ZUnionstore(const Slice& destination,
   *ret = 0;
   uint32_t statistic = 0;
   rocksdb::WriteBatch batch;
-  rocksdb::ReadOptions read_options;
-  const rocksdb::Snapshot* snapshot = nullptr;
-
+  ReadOptionsAutoSnapshot read_options(db_);
   int32_t version;
   std::string meta_value;
   ScoreMember sm;
-  ScopeSnapshot ss(db_, &snapshot);
-  read_options.snapshot = snapshot;
   ScopeRecordLock l(lock_mgr_, destination);
   std::map<std::string, double> member_score_map;
 
@@ -1300,10 +1253,7 @@ Status RedisZSets::ZInterstore(const Slice& destination,
   *ret = 0;
   uint32_t statistic = 0;
   rocksdb::WriteBatch batch;
-  rocksdb::ReadOptions read_options;
-  const rocksdb::Snapshot* snapshot = nullptr;
-  ScopeSnapshot ss(db_, &snapshot);
-  read_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot read_options(db_);
   ScopeRecordLock l(lock_mgr_, destination);
 
   std::string meta_value;
@@ -1427,12 +1377,8 @@ Status RedisZSets::ZRangebylex(const Slice& key,
                                bool right_close,
                                std::vector<std::string>* members) {
   members->clear();
-  rocksdb::ReadOptions read_options;
-  const rocksdb::Snapshot* snapshot = nullptr;
-
+  ReadOptionsAutoSnapshot read_options(db_);
   std::string meta_value;
-  ScopeSnapshot ss(db_, &snapshot);
-  read_options.snapshot = snapshot;
 
   bool left_no_limit = !min.compare("-");
   bool right_not_limit = !max.compare("+");
@@ -1501,11 +1447,7 @@ Status RedisZSets::ZRemrangebylex(const Slice& key,
   *ret = 0;
   uint32_t statistic = 0;
   rocksdb::WriteBatch batch;
-  rocksdb::ReadOptions read_options;
-  const rocksdb::Snapshot* snapshot = nullptr;
-
-  ScopeSnapshot ss(db_, &snapshot);
-  read_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot read_options(db_);
   ScopeRecordLock l(lock_mgr_, key);
 
   bool left_no_limit = !min.compare("-");
@@ -1625,10 +1567,7 @@ bool RedisZSets::Scan(const std::string& start_key,
                       std::string* next_key) {
   std::string meta_key;
   bool is_finish = true;
-  rocksdb::ReadOptions iterator_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  iterator_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot iterator_options(db_);
   iterator_options.fill_cache = false;
 
   rocksdb::Iterator* it = db_->NewIterator(iterator_options, handles_[0]);
@@ -1670,10 +1609,7 @@ bool RedisZSets::PKExpireScan(const std::string& start_key,
                               int64_t* leftover_visits,
                               std::string* next_key) {
   bool is_finish = true;
-  rocksdb::ReadOptions iterator_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  iterator_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot iterator_options(db_);
   iterator_options.fill_cache = false;
 
   rocksdb::Iterator* it = db_->NewIterator(iterator_options, handles_[0]);
@@ -1742,12 +1678,8 @@ Status RedisZSets::ZScan(const Slice& key,
 
   int64_t rest = count;
   int64_t step_length = count;
-  rocksdb::ReadOptions read_options;
-  const rocksdb::Snapshot* snapshot;
-
+  ReadOptionsAutoSnapshot read_options(db_);
   std::string meta_value;
-  ScopeSnapshot ss(db_, &snapshot);
-  read_options.snapshot = snapshot;
   Status s = db_->Get(read_options, handles_[0], key, &meta_value);
   if (s.ok()) {
     ParsedZSetsMetaValue parsed_zsets_meta_value(&meta_value);
@@ -1819,10 +1751,7 @@ Status RedisZSets::PKScanRange(const Slice& key_start,
 
   std::string key;
   int32_t remain = limit;
-  rocksdb::ReadOptions iterator_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  iterator_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot iterator_options(db_);
   iterator_options.fill_cache = false;
 
   bool start_no_limit = !key_start.compare("");
@@ -1883,10 +1812,7 @@ Status RedisZSets::PKRScanRange(const Slice& key_start,
 
   std::string key;
   int32_t remain = limit;
-  rocksdb::ReadOptions iterator_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  iterator_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot iterator_options(db_);
   iterator_options.fill_cache = false;
 
   bool start_no_limit = !key_start.compare("");
@@ -1988,10 +1914,7 @@ Status RedisZSets::TTL(const Slice& key, int64_t* timestamp) {
 }
 
 void RedisZSets::ScanDatabase() {
-  rocksdb::ReadOptions iterator_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  iterator_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot iterator_options(db_);
   iterator_options.fill_cache = false;
   int32_t current_time = time(NULL);
 

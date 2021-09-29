@@ -125,10 +125,7 @@ Status RedisLists::ScanKeyNum(KeyInfo* key_info) {
   uint64_t ttl_sum = 0;
   uint64_t invaild_keys = 0;
 
-  rocksdb::ReadOptions iterator_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  iterator_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot iterator_options(db_);
   iterator_options.fill_cache = false;
 
   int64_t curtime;
@@ -162,10 +159,7 @@ Status RedisLists::ScanKeyNum(KeyInfo* key_info) {
 Status RedisLists::ScanKeys(const std::string& pattern,
                               std::vector<std::string>* keys) {
   std::string key;
-  rocksdb::ReadOptions iterator_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  iterator_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot iterator_options(db_);
   iterator_options.fill_cache = false;
 
   rocksdb::Iterator* iter = db_->NewIterator(iterator_options, handles_[0]);
@@ -188,10 +182,7 @@ Status RedisLists::ScanKeys(const std::string& pattern,
 
 Status RedisLists::PKPatternMatchDel(const std::string& pattern,
                                      int32_t* ret) {
-  rocksdb::ReadOptions iterator_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  iterator_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot iterator_options(db_);
   iterator_options.fill_cache = false;
 
   std::string key;
@@ -240,11 +231,7 @@ Status RedisLists::PKPatternMatchDel(const std::string& pattern,
 Status RedisLists::LIndex(const Slice& key,
                           int64_t index,
                           std::string* element) {
-  rocksdb::ReadOptions read_options;
-  const rocksdb::Snapshot* snapshot;
-
-  ScopeSnapshot ss(db_, &snapshot);
-  read_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot read_options(db_);
   std::string meta_value;
   Status s = db_->Get(read_options, handles_[0], key, &meta_value);
   if (s.ok()) {
@@ -524,12 +511,7 @@ Status RedisLists::LPushx(const Slice& key, const Slice& value, uint64_t* len) {
 
 Status RedisLists::LRange(const Slice& key, int64_t start, int64_t stop,
                           std::vector<std::string>* ret) {
-  rocksdb::ReadOptions read_options;
-  const rocksdb::Snapshot* snapshot;
-
-  ScopeSnapshot ss(db_, &snapshot);
-  read_options.snapshot = snapshot;
-
+  ReadOptionsAutoSnapshot read_options(db_);
   std::string meta_value;
   Status s = db_->Get(read_options, handles_[0], key, &meta_value);
   if (s.ok()) {
@@ -1059,10 +1041,7 @@ Status RedisLists::PKScanRange(const Slice& key_start,
 
   std::string key;
   int32_t remain = limit;
-  rocksdb::ReadOptions iterator_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  iterator_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot iterator_options(db_);
   iterator_options.fill_cache = false;
 
   bool start_no_limit = !key_start.compare("");
@@ -1123,10 +1102,7 @@ Status RedisLists::PKRScanRange(const Slice& key_start,
 
   std::string key;
   int32_t remain = limit;
-  rocksdb::ReadOptions iterator_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  iterator_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot iterator_options(db_);
   iterator_options.fill_cache = false;
 
   bool start_no_limit = !key_start.compare("");
@@ -1230,10 +1206,7 @@ bool RedisLists::Scan(const std::string& start_key,
                       std::string* next_key) {
   std::string meta_key;
   bool is_finish = true;
-  rocksdb::ReadOptions iterator_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  iterator_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot iterator_options(db_);
   iterator_options.fill_cache = false;
 
   rocksdb::Iterator* it = db_->NewIterator(iterator_options, handles_[0]);
@@ -1275,10 +1248,7 @@ bool RedisLists::PKExpireScan(const std::string& start_key,
                               int64_t* leftover_visits,
                               std::string* next_key) {
   bool is_finish = true;
-  rocksdb::ReadOptions iterator_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  iterator_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot iterator_options(db_);
   iterator_options.fill_cache = false;
 
   rocksdb::Iterator* it = db_->NewIterator(iterator_options, handles_[0]);
@@ -1382,10 +1352,7 @@ Status RedisLists::TTL(const Slice& key, int64_t* timestamp) {
 }
 
 void RedisLists::ScanDatabase() {
-  rocksdb::ReadOptions iterator_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  iterator_options.snapshot = snapshot;
+  ReadOptionsAutoSnapshot iterator_options(db_);
   iterator_options.fill_cache = false;
   int32_t current_time = time(NULL);
 
