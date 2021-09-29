@@ -23,4 +23,19 @@ ScopeSnapshot::~ScopeSnapshot() {
         db_->ReleaseSnapshot(*snapshot_);
 }
 
+ReadOptionsAutoSnapshot::ReadOptionsAutoSnapshot(rocksdb::DB* db) {
+    if (dynamic_cast<rocksdb::DBImplSecondary*>(db)) {
+        // DBImplSecondary::NewIterator does not support snapshot
+        db_ = nullptr;
+    } else {
+        db_ = db;
+        snapshot = db->GetSnapshot();
+    }
+}
+
+ReadOptionsAutoSnapshot::~ReadOptionsAutoSnapshot() {
+    if (db_)
+        db_->ReleaseSnapshot(snapshot);
+}
+
 } // namespace blackwidow

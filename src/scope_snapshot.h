@@ -20,5 +20,12 @@ class ScopeSnapshot {
   void operator=(const ScopeSnapshot&) = delete;
 };
 
+struct ReadOptionsAutoSnapshot : rocksdb::ReadOptions {
+  explicit ReadOptionsAutoSnapshot(rocksdb::DB* db);
+  ~ReadOptionsAutoSnapshot();
+private:
+  rocksdb::DB* db_;
+};
+
 }  // namespace blackwidow
 #endif  // SRC_SCOPE_SNAPSHOT_H_
