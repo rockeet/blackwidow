@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <limits>
 
+#include <terark/valvec.hpp>
 #include <terark/util/autofree.hpp>
 #include "blackwidow/util.h"
 #include "src/strings_filter.h"
@@ -27,6 +28,10 @@ static void StringDelHistogram(size_t key_size, size_t value_size) {
   g_pika_cmd_data_length_histogram->AddLengthMetric(length_histogram::RedisString, length_histogram::Del, length_histogram::Key, key_size);
   g_pika_cmd_data_length_histogram->AddLengthMetric(length_histogram::RedisString, length_histogram::Del, length_histogram::Value, value_size);
 };
+
+using namespace terark;
+using rocksdb::PinnableSlice;
+using std::string;
 
 namespace blackwidow {
 
@@ -608,26 +613,37 @@ Status RedisStrings::Incrbyfloat(const Slice& key, const Slice& value,
 
 Status RedisStrings::MGet(const std::vector<std::string>& keys,
                           std::vector<ValueStatus>* vss) {
+  const size_t num = keys.size();
   vss->clear();
-
-  Status s;
-  std::string value;
-  rocksdb::ReadOptions read_options;
-  const rocksdb::Snapshot* snapshot;
-  ScopeSnapshot ss(db_, &snapshot);
-  read_options.snapshot = snapshot;
-  for (const auto& key : keys) {
-    s = db_->Get(read_options, key, &value);
+  vss->reserve(num);
+  AutoFree<Slice>       ks(num);
+  valvec<PinnableSlice> ps(num, valvec_reserve());
+  valvec<Status>        ss(num);
+  for (size_t i = 0; i < num; ++i) ks.p[i] = keys[i];
+  for (size_t i = 0; i < num; ++i) {
+    ps.unchecked_emplace_back(&vss->emplace_back().value);
+  }
+  auto cfh = db_->DefaultColumnFamily();
+  ReadOptionsAutoSnapshot read_options(db_);
+  db_->MultiGet(read_options, cfh, num, ks.p, ps.data(), ss.data());
+  auto vssd = vss->data();
+  time_t now_time = ::time(nullptr);
+  for (size_t i = 0; i < num; ++i) {
+    Status& s = vssd[i].status = std::move(ss[i]);
+    string& v = vssd[i].value;
     if (s.ok()) {
-      ParsedStringsValue parsed_strings_value(&value);
-      if (parsed_strings_value.IsStale()) {
-        vss->push_back({std::string(), Status::NotFound("Stale")});
+      if (ps[i].IsPinned()) {
+        v.assign(ps[i].data_, ps[i].size_);
+      }
+      time_t timestamp = DecodeFixed32(&v.end()[-4]);
+      if (timestamp < now_time) {
+        s = Status::NotFound("Stale");
+        v.clear();
       } else {
-        vss->push_back(
-            {parsed_strings_value.user_value().ToString(), Status::OK()});
+        v.erase(v.end()-4, v.end()); // erase timestamp
       }
     } else if (s.IsNotFound()) {
-      vss->push_back({std::string(), Status::NotFound()});
+      v.clear();
     } else {
       vss->clear();
       return s;
