@@ -34,7 +34,7 @@ void CmdDataLengthHistogram::Reset() {
 CmdDataLengthHistogram::CmdDataLengthHistogram(const std::string &path) {
   bool exist = slash::FileExists(path);
   if (!exist) {
-    fd = open(path.c_str(), O_RDWR|O_CREAT);
+    fd = open(path.c_str(), O_RDWR|O_CREAT, 0644);
     ftruncate(fd, sizeof(*data));
   } else {
     fd = open(path.c_str(), O_RDWR);
