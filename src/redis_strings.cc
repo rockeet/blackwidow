@@ -623,15 +623,15 @@ Status RedisStrings::MGet(const std::vector<std::string>& keys,
     Status& s = vssd[i].status = std::move(ss[i]);
     string& v = vssd[i].value;
     if (s.ok()) {
-      if (ps[i].IsPinned()) {
-        v.assign(ps[i].data_, ps[i].size_);
-      }
-      time_t timestamp = DecodeFixed32(&v.end()[-4]);
-      if (timestamp < now_time) {
+      time_t timestamp = DecodeFixed32(&ps[i].end()[-4]);
+      if (timestamp && timestamp < now_time) {
         s = Status::NotFound("Stale");
         v.clear();
       } else {
-        v.erase(v.end()-4, v.end()); // erase timestamp
+        if (ps[i].IsPinned())
+          v.assign(ps[i].data_, ps[i].size_ - 4);
+        else
+          v.erase(v.end() - 4, v.end()); // erase timestamp
       }
     } else if (s.IsNotFound()) {
       v.clear();
@@ -683,7 +683,7 @@ Status RedisStrings::MSetnx(const std::vector<KeyValue>& kvs,
   for (size_t i = 0; i < num; ++i) {
     if (ss[i].ok()) {
       time_t timestamp = DecodeFixed32(ps[i].end()-4);
-      if (timestamp >= now_time) {
+      if (0 == timestamp || timestamp >= now_time) {
         exists = true;
         break;
       }
