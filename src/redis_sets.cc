@@ -23,7 +23,7 @@ static void SetAddHistogram(size_t field_size, size_t value_size) {
   //g_pika_cmd_data_length_histogram->AddLengthMetric(length_histogram::RedisSet, length_histogram::Add, length_histogram::Field, field_size);
   g_pika_cmd_data_length_histogram->AddLengthMetric(length_histogram::RedisSet, length_histogram::Add, length_histogram::Value, value_size);
 };
-static void AetDelHistogram(size_t field_size, size_t value_size) {
+static void SetDelHistogram(size_t field_size, size_t value_size) {
   //g_pika_cmd_data_length_histogram->AddLengthMetric(length_histogram::RedisSet, length_histogram::Del, length_histogram::Field, field_size);
   g_pika_cmd_data_length_histogram->AddLengthMetric(length_histogram::RedisSet, length_histogram::Del, length_histogram::Value, value_size);
 };
@@ -201,7 +201,7 @@ Status RedisSets::PKPatternMatchDel(const std::string& pattern,
       parsed_sets_meta_value.InitialMetaValue();
       batch.Put(handles_[0], key, meta_value);
       SetKeyHistogram(length_histogram::Del, key.size());
-      AetDelHistogram(0, parsed_sets_meta_value.user_value().size());
+      SetDelHistogram(0, parsed_sets_meta_value.user_value().size());
     }
     if (static_cast<size_t>(batch.Count()) >= BATCH_DELETE_LIMIT) {
       s = db_->Write(default_write_options_, &batch);
@@ -866,7 +866,7 @@ Status RedisSets::SPop(const Slice& key,
            iter->Next(), cur_index++) {
         if (cur_index == target_index) {
           batch.Delete(handles_[1], iter->key());
-          AetDelHistogram(0, iter->key().size());
+          SetDelHistogram(0, iter->key().size());
           ParsedSetsMemberKey parsed_sets_member_key(iter->key(), &parse_key_buf);
           *member = parsed_sets_member_key.member().ToString();
 
@@ -1003,7 +1003,7 @@ Status RedisSets::SRem(const Slice& key,
           cnt++;
           statistic++;
           batch.Delete(handles_[1], sets_member_key.Encode());
-          AetDelHistogram(0, member.size());
+          SetDelHistogram(0, member.size());
         } else if (s.IsNotFound()) {
         } else {
           return s;
@@ -1387,7 +1387,7 @@ Status RedisSets::Del(const Slice& key) {
       parsed_sets_meta_value.InitialMetaValue();
       s = db_->Put(default_write_options_, handles_[0], key, meta_value);
       SetKeyHistogram(length_histogram::Del, key.size());
-      AetDelHistogram(0, parsed_sets_meta_value.user_value().size());
+      SetDelHistogram(0, parsed_sets_meta_value.user_value().size());
       UpdateSpecificKeyStatistics(key.ToString(), statistic);
     }
   }

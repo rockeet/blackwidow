@@ -684,6 +684,7 @@ Status RedisHashes::HMSet(const Slice& key,
       batch.Put(handles_[1], hashes_data_key.Encode(), fv.value);
       HashFieldAddHistogram(fv.field.size(), fv.value.size());
     }
+    HashKeyHistogram(length_histogram::Add, key.size());
   }
   s = db_->Write(default_write_options_, &batch);
   UpdateSpecificKeyStatistics(key.ToString(), statistic);
@@ -743,6 +744,7 @@ Status RedisHashes::HSet(const Slice& key, const Slice& field,
     HashesDataKey data_key(key, version, field);
     batch.Put(handles_[1], data_key.Encode(), value);
     HashFieldAddHistogram(field.size(), value.size());
+    HashKeyHistogram(length_histogram::Add, key.size());
     *res = 1;
   } else {
     return s;
@@ -798,6 +800,7 @@ Status RedisHashes::HSetnx(const Slice& key, const Slice& field,
     HashesDataKey hashes_data_key(key, version, field);
     batch.Put(handles_[1], hashes_data_key.Encode(), value);
     HashFieldAddHistogram(field.size(), value.size());
+    HashKeyHistogram(length_histogram::Add, key.size());
     *ret = 1;
   } else {
     return s;
