@@ -12,6 +12,7 @@
 #include <sys/stat.h>
 
 #include "terark/num_to_str.hpp"
+#include "terark/util/function.hpp"
 #include "slash/include/env.h"
 #include "pika_data_length_histogram.h"
 
@@ -31,25 +32,23 @@ void CmdDataLengthHistogram::Reset() {
   }
 }
 // checksum 校验文件
-CmdDataLengthHistogram::CmdDataLengthHistogram(const std::string &path) {
+CmdDataLengthHistogram::CmdDataLengthHistogram(const std::string& path) {
   bool exist = slash::FileExists(path);
   if (!exist) {
     fd = open(path.c_str(), O_RDWR|O_CREAT, 0644);
-    ftruncate(fd, sizeof(*data));
+    TERARK_VERIFY_S(fd > 0, "open(%s, O_RDWR|O_CREAT, 0644) = %m", path);
+    TERARK_VERIFY_S(ftruncate(fd, sizeof(*data)) == 0, "ftruncate(%s) = %m", path);
   } else {
+    struct stat st;
     fd = open(path.c_str(), O_RDWR);
-  }
-  if (fd < 0) LOG(FATAL) << "CmdDataLengthHistogram error fd:" << fd;
-
-  struct stat buf;
-  int result = fstat(fd, &buf);
-  if (result != 0) LOG(FATAL) << "CmdDataLengthHistogram get file size error:" << errno;
-  if (buf.st_size != sizeof(*data)) {
-    LOG(FATAL) << "CmdDataLengthHistogram file:"<< path << " size error current:" << buf.st_size << "!=" << sizeof(*data);
+    TERARK_VERIFY_S(fd > 0, "open(%s, O_RDWR) = %m", path);
+    TERARK_VERIFY_S(0 == fstat(fd, &st), "file %s : %m", path);
+    TERARK_VERIFY_S(st.st_size == sizeof(*data), "st_size(%s) = %zd, expect %zd",
+        path, size_t(st.st_size), sizeof(*data));
   }
 
   auto addr = mmap(NULL, sizeof(*data), PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
-  if (addr == MAP_FAILED) LOG(FATAL) << "CmdDataLengthHistogram mmap failed";
+  TERARK_VERIFY_S(addr != MAP_FAILED, "mmap(%s) = %m", path);
   data = (HistogramData*)addr;
 
   if (exist && data->check_sum != GetCheckSum()) {
