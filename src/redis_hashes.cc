@@ -250,18 +250,18 @@ Status RedisHashes::HDel(const Slice& key,
       *ret = 0;
       return Status::OK();
     } else {
+      read_options.just_check_key_exists = true;
       std::string data_value;
       version = parsed_hashes_meta_value.version();
       for (size_t i = 0; i < uniq_fields.end_i(); ++i) {
         const Slice& field = uniq_fields.elem_at(i);
         HashesDataKey hashes_data_key(key, version, field);
-        read_options.just_check_key_exists = true;
-        s = db_->Get(read_options, handles_[1],
-                hashes_data_key.Encode(), &data_value);
+        const Slice encoded_key = hashes_data_key.Encode();
+        s = db_->Get(read_options, handles_[1], encoded_key, &data_value);
         if (s.ok()) {
           del_cnt++;
           statistic++;
-          batch.Delete(handles_[1], hashes_data_key.Encode());
+          batch.Delete(handles_[1], encoded_key);
         //HashFieldDelHistogram(field.size(), data_value.size() - data_suffix_length);
         } else if (s.IsNotFound()) {
           continue;
