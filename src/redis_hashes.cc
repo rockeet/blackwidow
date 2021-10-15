@@ -258,13 +258,14 @@ Status RedisHashes::HDel(const Slice& key,
       version = parsed_hashes_meta_value.version();
       for (const auto& field : filtered_fields) {
         HashesDataKey hashes_data_key(key, version, field);
+        read_options.just_check_key_exists = true;
         s = db_->Get(read_options, handles_[1],
                 hashes_data_key.Encode(), &data_value);
         if (s.ok()) {
           del_cnt++;
           statistic++;
           batch.Delete(handles_[1], hashes_data_key.Encode());
-          HashFieldDelHistogram(field.size(), data_value.size() - data_suffix_length);
+        //HashFieldDelHistogram(field.size(), data_value.size() - data_suffix_length);
         } else if (s.IsNotFound()) {
           continue;
         } else {
@@ -652,7 +653,9 @@ Status RedisHashes::HMSet(const Slice& key,
         fields_key_data.unchecked_emplace_back(key, version, fv.field);
         fields_key_ref.p[i] = fields_key_data[i].Encode();
       }
-      db_->MultiGet(default_read_options_, handles_[1], num,
+      auto rdopt = default_read_options_;
+      rdopt.just_check_key_exists = true;
+      db_->MultiGet(rdopt, handles_[1], num,
             fields_key_ref.p, values_data.data(), status_vec.data());
       for (size_t i = 0; i < num; ++i) {
         const auto& fv = *filtered_fvs[i];
@@ -715,16 +718,13 @@ Status RedisHashes::HSet(const Slice& key, const Slice& field,
       version = parsed_hashes_meta_value.version();
       std::string data_value;
       HashesDataKey hashes_data_key(key, version, field);
-      s = db_->Get(default_read_options_,
-          handles_[1], hashes_data_key.Encode(), &data_value);
+      auto rdopt = default_read_options_;
+      rdopt.just_check_key_exists = true;
+      s = db_->Get(rdopt, handles_[1], hashes_data_key.Encode(), &data_value);
       if (s.ok()) {
         *res = 0;
-        if (data_value == value.ToString()) {
-          return Status::OK();
-        } else {
-          batch.Put(handles_[1], hashes_data_key.Encode(), value);
-          statistic++;
-        }
+        batch.Put(handles_[1], hashes_data_key.Encode(), value);
+        statistic++;
       } else if (s.IsNotFound()) {
         parsed_hashes_meta_value.ModifyCount(1);
         batch.Put(handles_[0], key, meta_value);
