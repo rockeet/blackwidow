@@ -230,13 +230,9 @@ Status RedisHashes::HDel(const Slice& key,
                          const std::vector<std::string>& fields,
                          int32_t* ret) {
   uint32_t statistic = 0;
-  std::vector<std::string> filtered_fields;
-  std::unordered_set<std::string> field_set;
-  for (auto iter = fields.begin(); iter != fields.end(); ++iter) {
-    const std::string& field = *iter;
-    if (field_set.insert(field).second) {
-      filtered_fields.push_back(field);
-    }
+  gold_hash_tab<Slice,Slice,SliceHashEqual> uniq_fields(fields.size());
+  for (const std::string& field : fields) {
+    uniq_fields.insert_i(field);
   }
 
   rocksdb::WriteBatch batch;
@@ -256,7 +252,8 @@ Status RedisHashes::HDel(const Slice& key,
     } else {
       std::string data_value;
       version = parsed_hashes_meta_value.version();
-      for (const auto& field : filtered_fields) {
+      for (size_t i = 0; i < uniq_fields.end_i(); ++i) {
+        const Slice& field = uniq_fields.elem_at(i);
         HashesDataKey hashes_data_key(key, version, field);
         read_options.just_check_key_exists = true;
         s = db_->Get(read_options, handles_[1],
