@@ -251,7 +251,7 @@ Status RedisHashes::HDel(const Slice& key,
       return Status::OK();
     } else {
       read_options.just_check_key_exists = true;
-      std::string data_value;
+      rocksdb::PinnableSlice data_value;
       version = parsed_hashes_meta_value.version();
       for (size_t i = 0; i < uniq_fields.end_i(); ++i) {
         const Slice& field = uniq_fields.elem_at(i);
@@ -713,7 +713,7 @@ Status RedisHashes::HSet(const Slice& key, const Slice& field,
       *res = 1;
     } else {
       version = parsed_hashes_meta_value.version();
-      std::string data_value;
+      rocksdb::PinnableSlice data_value;
       HashesDataKey hashes_data_key(key, version, field);
       auto rdopt = default_read_options_;
       rdopt.just_check_key_exists = true;
