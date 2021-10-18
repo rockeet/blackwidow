@@ -717,15 +717,16 @@ Status RedisHashes::HSet(const Slice& key, const Slice& field,
       HashesDataKey hashes_data_key(key, version, field);
       auto rdopt = default_read_options_;
       rdopt.just_check_key_exists = true;
-      s = db_->Get(rdopt, handles_[1], hashes_data_key.Encode(), &data_value);
+      const Slice encoded_key = hashes_data_key.Encode();
+      s = db_->Get(rdopt, handles_[1], encoded_key, &data_value);
       if (s.ok()) {
         *res = 0;
-        batch.Put(handles_[1], hashes_data_key.Encode(), value);
+        batch.Put(handles_[1], encoded_key, value);
         statistic++;
       } else if (s.IsNotFound()) {
         parsed_hashes_meta_value.ModifyCount(1);
         batch.Put(handles_[0], key, meta_value);
-        batch.Put(handles_[1], hashes_data_key.Encode(), value);
+        batch.Put(handles_[1], encoded_key, value);
         HashFieldAddHistogram(field.size(), value.size());
         *res = 1;
       } else {
