@@ -3,6 +3,7 @@
 #include <terark/io/FileStream.hpp>
 #include <terark/io/StreamBuffer.hpp>
 #include <terark/util/process.hpp>
+#include <logging/logging.h>
 #include <rocksdb/db.h>
 #include <rocksdb/env.h>
 #include <rocksdb/comparator.h>
