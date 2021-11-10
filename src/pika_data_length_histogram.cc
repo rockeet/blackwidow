@@ -85,7 +85,7 @@ std::string CmdDataLengthHistogram::GetLengthMetric() {
         u_int64_t last = 0;
         size_t limit = 0;
         for (size_t i = bucketMapper.BucketCount() - 1; i > 0; i--) {
-          if (buckets[i].cnt > 0) { limit = i; break; }
+          if (buckets[i] > 0) { limit = i; break; }
         }
         auto &t_name = type_str[type];
         auto &s_name = step_str[step];
@@ -95,7 +95,7 @@ std::string CmdDataLengthHistogram::GetLengthMetric() {
           return "";
         };
         for (size_t i = 0; i <= limit; i++) {
-          last += buckets[i].cnt;
+          last += buckets[i];
           oss<<"pika_db_read_write_bucket{" <<add_label()<<" le=\""<<bucketMapper.BucketLimit(i)<<"\"} "<<last<<"\n";
         }
         oss<<"pika_db_read_write_bucket{"<<add_label()<<" le=\"+Inf\"} "<<last<<"\n";
