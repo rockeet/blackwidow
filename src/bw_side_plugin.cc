@@ -9,7 +9,7 @@
 #include <rocksdb/comparator.h>
 #include <rocksdb/compaction_filter.h>
 #include <topling/side_plugin_factory.h>
-#include <dcompact/dcompact_executor.h>
+#include <db/compaction/compaction_executor.h>
 #include <boost/core/demangle.hpp>
 
 /*
@@ -231,11 +231,9 @@ struct TTL_StreamReader {
     using std::string;
     static const string NFS_MOUNT_ROOT = GetDirFromEnv("NFS_MOUNT_ROOT", "/mnt/nfs");
     const string& new_prefix = MakePath(NFS_MOUNT_ROOT, cp.instance_name);
-    const string& hoster_dir = cp.cf_paths[0].path;
+    const string& hoster_dir = cp.cf_paths.back().path;
     const string& worker_dir = ReplacePrefix(cp.hoster_root, new_prefix, hoster_dir);
-    std::string fpath = worker_dir;
-    char buf[32];
-    fpath.append(buf, sprintf(buf, "/job-%05d/ttl", cp.job_id));
+    std::string fpath = MakePath(CatJobID(worker_dir, cp.job_id), "/ttl");
     //m_file.open(fpath, O_RDONLY, 0777);
     m_file.open("zstd -qdcf " + fpath, "r");
     m_reader.attach(&m_file);
@@ -474,6 +472,7 @@ static VersionTimestamp DecodeVT(std::string* meta_value) {
   return vt;
 }
 
+/*
 inline static const char* pathbasename(Slice p) {
   auto sep = (const char*)memrchr(p.data_, '/', p.size_);
   if (sep)
@@ -481,6 +480,7 @@ inline static const char* pathbasename(Slice p) {
   else
     return p.data_;
 }
+*/
 
 Iterator* NewMetaIter(DB* db, ColumnFamilyHandle* cfh,
                       uint64_t smallest_seqno) {
@@ -510,10 +510,8 @@ size_t write_ttl_file(const CompactionParams& cp,
   using namespace std::chrono;
   auto t0 = steady_clock::now();
   size_t bytes = 0, num = 0;
-  std::string fpath = cp.cf_paths[0].path;
+  std::string fpath = cp.cf_paths.back().path;
 {
-  char buf[32];
-  fpath.append(buf, sprintf(buf, "/job-%05d/ttl", cp.job_id));
   //OsFileStream fp(fpath, O_WRONLY|O_CREAT, 0777);
   ProcPipeStream fp("zstd -qf - -o " + fpath, "w");
   LittleEndianDataOutput<OutputBuffer> dio(&fp);
