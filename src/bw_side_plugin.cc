@@ -303,7 +303,7 @@ public:
   bool Filter(int level, const Slice& key,
               const rocksdb::Slice& value,
               std::string* new_value, bool* value_changed) const override {
-              
+
     fl_cnt.exec_filter_times++;
 
     ParsedListsDataKey parsed_lists_data_key(key, &parse_key_buf_);
@@ -510,7 +510,7 @@ size_t write_ttl_file(const CompactionParams& cp,
   using namespace std::chrono;
   auto t0 = steady_clock::now();
   size_t bytes = 0, num = 0;
-  std::string fpath = cp.cf_paths.back().path;
+  auto fpath = MakePath(CatJobID(cp.cf_paths.back().path, cp.job_id), "ttl");
 {
   //OsFileStream fp(fpath, O_WRONLY|O_CREAT, 0777);
   ProcPipeStream fp("zstd -qf - -o " + fpath, "w");
