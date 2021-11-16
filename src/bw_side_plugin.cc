@@ -653,17 +653,27 @@ struct BaseDataKeyDecoder : public UserKeyCoder {
     TERARK_DIE("This function should not be called");
   }
   void Decode(Slice coded, std::string* de) const override {
-    std::string tmp_s;
-    blackwidow::ParsedBaseDataKey tmp_p(coded, &tmp_s);
-    auto k = tmp_p.key();
-    auto d = tmp_p.data();
     de->clear();
-    de->reserve(k.size() + 1 + 32 + 1 + d.size());
-    HtmlAppendEscape(de, k.data(), k.size());
-    de->append("<em>:");
-    AppendIsoDateTime(de, tmp_p.version());
-    de->append(":</em>");
-    HtmlAppendEscape(de, d.data(), d.size());
+    auto end = terark::end_of_00_0n(coded.begin(), coded.end());
+    if (end + 4 <= coded.end()) {
+      HtmlAppendEscape(de, coded.begin(), end - 2 - coded.begin());
+      de->append("<em>:");
+      AppendIsoDateTime(de, unaligned_load<uint32_t>(end));
+      de->append(":</em>");
+      HtmlAppendEscape(de, end + 4, coded.end() - (end + 4));
+    }
+    else {
+      TERARK_VERIFY(end <= coded.end());
+      HtmlAppendEscape(de, coded.begin(), end - 2 - coded.begin());
+      de->append("<em>:");
+      if (end < coded.end()) {
+        de->append(Slice(end, coded.end() - end).ToString(true)); // hex
+      }
+      else {
+        de->append("&lt;EMPTY&gt;");
+      }
+      de->append(":</em>");
+    }
   }
 };
 ROCKSDB_REG_DEFAULT_CONS(BaseDataKeyDecoder, AnyPlugin);
