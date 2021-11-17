@@ -691,20 +691,32 @@ struct ZSetsScoreKeyDecoder : public UserKeyCoder {
     TERARK_DIE("This function should not be called");
   }
   void Decode(Slice coded, std::string* de) const override {
-    std::string tmp_s;
-    blackwidow::ParsedZSetsScoreKey tmp_p(coded, &tmp_s);
-    auto k = tmp_p.key();
-    auto s = std::to_string(tmp_p.score());
-    auto m = tmp_p.member();
     de->clear();
-    de->reserve(k.size() + 1 + 32 + 1 + s.size() + 1 + m.size());
-    HtmlAppendEscape(de, k.data(), k.size());
-    de->append("<em>:");
-    AppendIsoDateTime(de, tmp_p.version());
-    de->append("</em>:<em>");
-    de->append(s);
-    de->append(":</em>");
-    HtmlAppendEscape(de, m.data(), m.size());
+    auto end = terark::end_of_00_0n(coded.begin(), coded.end());
+    if (end + 8 <= coded.end()) {
+      HtmlAppendEscape(de, coded.begin(), end - 2 - coded.begin());
+      de->append("<em>:");
+      AppendIsoDateTime(de, unaligned_load<uint32_t>(end));
+      de->append(":</em>");
+      AppendIsoDateTime(de, unaligned_load<double>(end + 4));
+      de->append(":");
+      HtmlAppendEscape(de, end + 8, coded.end() - (end + 8));
+    }
+    else {
+      TERARK_VERIFY(end <= coded.end());
+      HtmlAppendEscape(de, coded.begin(), end - 2 - coded.begin());
+      de->append("<em>:");
+      if (end + 4 < coded.end()) {
+        de->append(Slice(end, 4).ToString(true));
+      }
+      else {
+        de->append("&lt;EMPTY&gt;");
+      }
+      de->append(":</em>");
+      if (end + 8 < coded.end()) {
+        de->append(Slice(end + 4, coded.end() - (end + 4)).ToString(true));
+      }
+    }
   }
 };
 ROCKSDB_REG_DEFAULT_CONS(ZSetsScoreKeyDecoder, AnyPlugin);
@@ -722,17 +734,27 @@ struct ListsDataKeyDecoder : public UserKeyCoder {
     TERARK_DIE("This function should not be called");
   }
   void Decode(Slice coded, std::string* de) const override {
-    std::string tmp_s;
-    blackwidow::ParsedListsDataKey tmp_p(coded, &tmp_s);
-    auto k = tmp_p.key();
-    auto i = std::to_string(tmp_p.index());
     de->clear();
-    de->reserve(coded.size_ + 32);
-    HtmlAppendEscape(de, k.data(), k.size());
-    de->append("<em>:");
-    AppendIsoDateTime(de, tmp_p.version());
-    de->append(":</em>");
-    de->append(i);
+    auto end = terark::end_of_00_0n(coded.begin(), coded.end());
+    if (end + 4 <= coded.end()) {
+      HtmlAppendEscape(de, coded.begin(), end - 2 - coded.begin());
+      de->append("<em>:");
+      AppendIsoDateTime(de, unaligned_load<uint32_t>(end));
+      de->append(":</em>");
+      de->append(Slice(end + 4, coded.end() - (end + 4)).ToString(true));
+    }
+    else {
+      TERARK_VERIFY(end <= coded.end());
+      HtmlAppendEscape(de, coded.begin(), end - 2 - coded.begin());
+      de->append("<em>:");
+      if (end < coded.end()) {
+        de->append(Slice(end, coded.end() - end).ToString(true)); // hex
+      }
+      else {
+        de->append("&lt;EMPTY&gt;");
+      }
+      de->append(":</em>");
+    }
   }
 };
 ROCKSDB_REG_DEFAULT_CONS(ListsDataKeyDecoder, AnyPlugin);
