@@ -696,7 +696,7 @@ struct ZSetsScoreKeyDecoder : public UserKeyCoder {
     if (end + 8 <= coded.end()) {
       HtmlAppendEscape(de, coded.begin(), end - 2 - coded.begin());
       de->append("<em>:");
-      AppendIsoDateTime(de, unaligned_load<uint32_t>(end));
+      AppendIsoDateTime(de, VALUE_OF_BYTE_SWAP_IF_LITTLE_ENDIAN(unaligned_load<int32_t>(end)));
       de->append(":</em>");
       AppendIsoDateTime(de, unaligned_load<double>(end + 4));
       de->append(":");
@@ -707,7 +707,7 @@ struct ZSetsScoreKeyDecoder : public UserKeyCoder {
       HtmlAppendEscape(de, coded.begin(), end - 2 - coded.begin());
       de->append("<em>:");
       if (end + 4 < coded.end()) {
-        de->append(Slice(end, 4).ToString(true));
+        AppendIsoDateTime(de, VALUE_OF_BYTE_SWAP_IF_LITTLE_ENDIAN(unaligned_load<int32_t>(end)));
       }
       else {
         de->append("&lt;EMPTY&gt;");
@@ -739,7 +739,7 @@ struct ListsDataKeyDecoder : public UserKeyCoder {
     if (end + 4 <= coded.end()) {
       HtmlAppendEscape(de, coded.begin(), end - 2 - coded.begin());
       de->append("<em>:");
-      AppendIsoDateTime(de, unaligned_load<uint32_t>(end));
+      AppendIsoDateTime(de, VALUE_OF_BYTE_SWAP_IF_LITTLE_ENDIAN(unaligned_load<int32_t>(end)));
       de->append(":</em>");
       de->append(Slice(end + 4, coded.end() - (end + 4)).ToString(true));
     }
