@@ -136,10 +136,10 @@ static_lib: $(LIBRARY)
 dbg: $(LIBRARY)
 
 test:
-	make test -C ./tests
+	+make test -C ./tests
 
 example:
-	make -C ./examples
+	+make -C ./examples
 
 $(LIBRARY): $(LIBOBJECTS)
 	$(AM_V_AR)rm -f $@
@@ -147,8 +147,8 @@ $(LIBRARY): $(LIBOBJECTS)
 	$(AM_V_at)$(LD) -shared -fPIC -o $@ $(LIBOBJECTS) -L${ROCKSDB_PATH} -lrocksdb${MAYBE_DEBUG} $(LDFLAGS)
 
 clean:
-	make -C ./examples clean
-	make -C ./tests clean
+	+make -C ./examples clean
+	+make -C ./tests clean
 	rm -f $(LIBRARY)
 	rm -rf $(CLEAN_FILES)
 	rm -rf $(LIBOUTPUT)
