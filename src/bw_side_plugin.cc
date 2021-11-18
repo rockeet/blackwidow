@@ -31,7 +31,6 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-
 namespace blackwidow {
 
 using namespace rocksdb;
@@ -698,7 +697,9 @@ struct ZSetsScoreKeyDecoder : public UserKeyCoder {
       de->append("<em>:");
       AppendIsoDateTime(de, VALUE_OF_BYTE_SWAP_IF_LITTLE_ENDIAN(unaligned_load<int32_t>(end)));
       de->append(":</em>");
-      AppendIsoDateTime(de, unaligned_load<double>(end + 4));
+      double score = 0;
+      decode_memcmp_double((unsigned char*)end + 4, &score);
+      de->append(std::to_string(score)); 
       de->append(":");
       HtmlAppendEscape(de, end + 8, coded.end() - (end + 8));
     }
@@ -706,7 +707,7 @@ struct ZSetsScoreKeyDecoder : public UserKeyCoder {
       TERARK_VERIFY(end <= coded.end());
       HtmlAppendEscape(de, coded.begin(), end - 2 - coded.begin());
       de->append("<em>:");
-      if (end + 4 < coded.end()) {
+      if (end + 4 <= coded.end()) {
         AppendIsoDateTime(de, VALUE_OF_BYTE_SWAP_IF_LITTLE_ENDIAN(unaligned_load<int32_t>(end)));
       }
       else {
@@ -714,7 +715,9 @@ struct ZSetsScoreKeyDecoder : public UserKeyCoder {
       }
       de->append(":</em>");
       if (end + 8 < coded.end()) {
-        de->append(Slice(end + 4, coded.end() - (end + 4)).ToString(true));
+        double score;
+        decode_memcmp_double((unsigned char*)end + 4, &score);
+        de->append(std::to_string(score)); 
       }
     }
   }
