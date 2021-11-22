@@ -2033,4 +2033,32 @@ Status BlackWidow::SetOptions(const OptionType& option_type, const std::string& 
   return s;
 }
 
+std::vector<std::string> BlackWidow::GetAllDirs() const {
+  std::vector<std::string> vec;
+  auto add = [&](auto* db) {
+    using namespace rocksdb;
+    DBOptions opt = db->GetDB()->GetDBOptions();
+    for (auto& p : opt.db_paths) {
+      vec.push_back(p.path);
+    }
+    if (!opt.wal_dir.empty())
+      vec.push_back(opt.wal_dir);
+  };
+  add(strings_db_);
+  add(hashes_db_);
+  add(lists_db_);
+  add(sets_db_);
+  add(zsets_db_);
+  std::sort(vec.begin(), vec.end());
+  for (auto& dir : vec) {
+    while (dir.back() == '/') {
+      dir.pop_back();
+    }
+  }
+  std::string empty;
+  vec.erase(std::unique(vec.begin(), vec.end()), vec.end());
+  vec.erase(std::remove(vec.begin(), vec.end(), empty), vec.end());
+  return vec;
+}
+
 }  //  namespace blackwidow
