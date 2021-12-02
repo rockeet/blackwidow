@@ -4,6 +4,7 @@ CXXFLAGS += -gdwarf -g3 -std=gnu++17 -fno-builtin-memcmp -msse -msse4.2 -pipe -f
 PROFILING_FLAGS=-pg
 ARFLAGS = rs
 OPT=
+export SHELL := $(shell which bash)
 
 # Set the default DEBUG_LEVEL to 0
 DEBUG_LEVEL?=0
@@ -109,7 +110,7 @@ $(SRC_DIR)/build_version.cc: FORCE
 	$(AM_V_at)if test -f $@; then         \
 	  cmp -s $@-t $@ && rm -f $@-t || mv -f $@-t $@;    \
 	else mv -f $@-t $@; fi
-FORCE: 
+FORCE:
 
 LIBOBJECTS = $(LIB_SOURCES:.cc=.o)
 
