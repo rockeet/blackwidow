@@ -1031,7 +1031,7 @@ Status RedisZSets::ZRevrangebyscore(const Slice& key,
       if (max != std::numeric_limits<double>::max()) {
         iter->SeekForPrev(zsets_score_key.Encode());
       } else {
-        iter->Seek(zsets_score_key.Encode());
+        iter->SeekToLast();
       }
       for (;
            iter->Valid() && left > 0;
