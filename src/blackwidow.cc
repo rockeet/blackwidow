@@ -1063,7 +1063,6 @@ int64_t BlackWidow::Scan(const DataType& dtype, int64_t cursor,
         }
       }
       start_key = prefix;
-      break;
     case 'h':
       is_finish = hashes_db_->Scan(start_key, pattern,
                                    keys, &leftover_visits, &next_key);
@@ -1082,7 +1081,6 @@ int64_t BlackWidow::Scan(const DataType& dtype, int64_t cursor,
         }
       }
       start_key = prefix;
-      break;
     case 's':
       is_finish = sets_db_->Scan(start_key, pattern,
                                  keys, &leftover_visits, &next_key);
@@ -1101,7 +1099,6 @@ int64_t BlackWidow::Scan(const DataType& dtype, int64_t cursor,
         }
       }
       start_key = prefix;
-      break;
     case 'l':
       is_finish = lists_db_->Scan(start_key, pattern,
                                   keys, &leftover_visits, &next_key);
@@ -1120,7 +1117,6 @@ int64_t BlackWidow::Scan(const DataType& dtype, int64_t cursor,
         }
       }
       start_key = prefix;
-      break;
     case 'z':
       is_finish = zsets_db_->Scan(start_key, pattern,
                                   keys, &leftover_visits, &next_key);
@@ -1132,7 +1128,6 @@ int64_t BlackWidow::Scan(const DataType& dtype, int64_t cursor,
         cursor_ret = 0;
         break;
       }
-      break;
   }
   return cursor_ret;
 }
