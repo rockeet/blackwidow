@@ -1018,6 +1018,8 @@ int64_t BlackWidow::Exists(const std::vector<std::string>& keys,
   }
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wimplicit-fallthrough="
 int64_t BlackWidow::Scan(const DataType& dtype, int64_t cursor,
                          const std::string& pattern, int64_t count,
                          std::vector<std::string>* keys) {
@@ -1131,6 +1133,7 @@ int64_t BlackWidow::Scan(const DataType& dtype, int64_t cursor,
   }
   return cursor_ret;
 }
+#pragma GCC diagnostic pop
 
 int64_t BlackWidow::PKExpireScan(const DataType& dtype, int64_t cursor,
                                  int32_t min_ttl, int32_t max_ttl,
