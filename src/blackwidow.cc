@@ -1018,8 +1018,6 @@ int64_t BlackWidow::Exists(const std::vector<std::string>& keys,
   }
 }
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wimplicit-fallthrough="
 int64_t BlackWidow::Scan(const DataType& dtype, int64_t cursor,
                          const std::string& pattern, int64_t count,
                          std::vector<std::string>* keys) {
@@ -1065,6 +1063,7 @@ int64_t BlackWidow::Scan(const DataType& dtype, int64_t cursor,
         }
       }
       start_key = prefix;
+      // fallthrough
     case 'h':
       is_finish = hashes_db_->Scan(start_key, pattern,
                                    keys, &leftover_visits, &next_key);
@@ -1083,6 +1082,7 @@ int64_t BlackWidow::Scan(const DataType& dtype, int64_t cursor,
         }
       }
       start_key = prefix;
+      // fallthrough
     case 's':
       is_finish = sets_db_->Scan(start_key, pattern,
                                  keys, &leftover_visits, &next_key);
@@ -1101,6 +1101,7 @@ int64_t BlackWidow::Scan(const DataType& dtype, int64_t cursor,
         }
       }
       start_key = prefix;
+      // fallthrough
     case 'l':
       is_finish = lists_db_->Scan(start_key, pattern,
                                   keys, &leftover_visits, &next_key);
@@ -1119,6 +1120,7 @@ int64_t BlackWidow::Scan(const DataType& dtype, int64_t cursor,
         }
       }
       start_key = prefix;
+      // fallthrough
     case 'z':
       is_finish = zsets_db_->Scan(start_key, pattern,
                                   keys, &leftover_visits, &next_key);
@@ -1130,10 +1132,10 @@ int64_t BlackWidow::Scan(const DataType& dtype, int64_t cursor,
         cursor_ret = 0;
         break;
       }
+      // fallthrough
   }
   return cursor_ret;
 }
-#pragma GCC diagnostic pop
 
 int64_t BlackWidow::PKExpireScan(const DataType& dtype, int64_t cursor,
                                  int32_t min_ttl, int32_t max_ttl,
