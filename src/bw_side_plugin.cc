@@ -642,7 +642,7 @@ void AppendIsoDateTime(std::string* str, time_t t) {
 }
 struct BaseDataKeyDecoder : public UserKeyCoder {
   const char* Name() const override { return "BaseDataKeyDecoder"; }
-  void Update(const json&, const SidePluginRepo&) override {
+  void Update(const json&, const json&, const SidePluginRepo&) override {
   }
   std::string ToString(const json&, const SidePluginRepo&) const override {
     return "This is the BaseDataKeyDecoder for hashes, sets and zsets.<br/>"
@@ -680,7 +680,7 @@ ROCKSDB_REG_AnyPluginManip("BaseDataKeyDecoder");
 
 struct ZSetsScoreKeyDecoder : public UserKeyCoder {
   const char* Name() const override { return "ZSetsScoreKeyDecoder"; }
-  void Update(const json&, const SidePluginRepo&) override {
+  void Update(const json&, const json&, const SidePluginRepo&) override {
   }
   std::string ToString(const json&, const SidePluginRepo&) const override {
     return "This is the ZSetsScoreKeyDecoder.<br/>"
@@ -699,7 +699,7 @@ struct ZSetsScoreKeyDecoder : public UserKeyCoder {
       de->append(":</em>");
       double score = 0;
       decode_memcmp_double((unsigned char*)end + 4, &score);
-      de->append(std::to_string(score)); 
+      de->append(std::to_string(score));
       de->append(":");
       HtmlAppendEscape(de, end + 8, coded.end() - (end + 8));
     }
@@ -717,7 +717,7 @@ struct ZSetsScoreKeyDecoder : public UserKeyCoder {
       if (end + 8 < coded.end()) {
         double score;
         decode_memcmp_double((unsigned char*)end + 4, &score);
-        de->append(std::to_string(score)); 
+        de->append(std::to_string(score));
       }
     }
   }
@@ -727,7 +727,7 @@ ROCKSDB_REG_AnyPluginManip("ZSetsScoreKeyDecoder");
 
 struct ListsDataKeyDecoder : public UserKeyCoder {
   const char* Name() const override { return "ListsDataKeyDecoder"; }
-  void Update(const json&, const SidePluginRepo&) override {
+  void Update(const json&, const json&, const SidePluginRepo&) override {
   }
   std::string ToString(const json&, const SidePluginRepo&) const override {
     return "This is the ListsDataKeyDecoder.<br/>"
@@ -765,7 +765,7 @@ ROCKSDB_REG_AnyPluginManip("ListsDataKeyDecoder");
 
 template <class FilterFactory>
 struct FilterFactory_Manip : PluginManipFunc<CompactionFilterFactory> {
-  void Update(rocksdb::CompactionFilterFactory *, const json &js,
+  void Update(rocksdb::CompactionFilterFactory*, const json&, const json&,
               const SidePluginRepo &repo) const final {}
   std::string ToString(const CompactionFilterFactory &fac,
                        const json &dump_options,
