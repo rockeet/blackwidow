@@ -2061,4 +2061,12 @@ std::vector<std::string> BlackWidow::GetAllDirs() const {
   return vec;
 }
 
+void BlackWidow::GetRocksDBInfo(std::string &info) {
+  strings_db_->GetRocksDBInfo(info, "strings_");
+  hashes_db_->GetRocksDBInfo(info, "hashes_");
+  lists_db_->GetRocksDBInfo(info, "lists_");
+  sets_db_->GetRocksDBInfo(info, "sets_");
+  zsets_db_->GetRocksDBInfo(info, "zsets_");
+}
+
 }  //  namespace blackwidow
