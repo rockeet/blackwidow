@@ -1230,6 +1230,7 @@ class BlackWidow {
 
   SidePluginRepo* GetRepo() { return repo_.get(); }
   std::vector<std::string> GetAllDirs() const;
+  void GetRocksDBInfo(std::string &info);
  private:
   std::string sideplugin_conf_;
   std::shared_ptr<SidePluginRepo> repo_;
