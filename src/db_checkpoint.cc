@@ -182,10 +182,15 @@ Status DBCheckpointImpl::CreateCheckpointWithFiles(
       s = CopyFile(db_->GetFileSystem(), db_->GetName() + src_fname,
                    full_private_path + src_fname,
                    (type == kDescriptorFile) ? manifest_file_size : 0);
-#else
+#elif ROCKSDB_MAJOR < 7
       s = CopyFile(db_->GetFileSystem(), db_->GetName() + src_fname,
                    full_private_path + src_fname,
                    (type == kDescriptorFile) ? manifest_file_size : 0, false);
+#else
+      s = CopyFile(db_->GetFileSystem(), db_->GetName() + src_fname,
+                   full_private_path + src_fname,
+                   (type == kDescriptorFile) ? manifest_file_size : 0, false,
+                   nullptr, Temperature::kCold);
 #endif
     }
   }
@@ -215,11 +220,17 @@ Status DBCheckpointImpl::CreateCheckpointWithFiles(
                      db_->GetOptions().wal_dir + live_wal_files[i]->PathName(),
                      full_private_path + live_wal_files[i]->PathName(),
                      live_wal_files[i]->SizeFileBytes());
-#else
+#elif ROCKSDB_MAJOR < 7
         s = CopyFile(db_->GetFileSystem(),
                      db_->GetOptions().wal_dir + live_wal_files[i]->PathName(),
                      full_private_path + live_wal_files[i]->PathName(),
                      live_wal_files[i]->SizeFileBytes(), false);
+#else
+        s = CopyFile(db_->GetFileSystem(),
+                     db_->GetOptions().wal_dir + live_wal_files[i]->PathName(),
+                     full_private_path + live_wal_files[i]->PathName(),
+                     live_wal_files[i]->SizeFileBytes(), false,
+                     nullptr, Temperature::kCold);
 #endif
         break;
       }
@@ -242,11 +253,16 @@ Status DBCheckpointImpl::CreateCheckpointWithFiles(
         s = CopyFile(db_->GetFileSystem(),
                      db_->GetOptions().wal_dir + live_wal_files[i]->PathName(),
                      full_private_path + live_wal_files[i]->PathName(), 0);
-#else
+#elif ROCKSDB_MAJOR < 7
         s = CopyFile(db_->GetFileSystem(),
                      db_->GetOptions().wal_dir + live_wal_files[i]->PathName(),
                      full_private_path + live_wal_files[i]->PathName(),
                      0, false);
+#else
+        s = CopyFile(db_->GetFileSystem(),
+                     db_->GetOptions().wal_dir + live_wal_files[i]->PathName(),
+                     full_private_path + live_wal_files[i]->PathName(),
+                     0, false, nullptr, Temperature::kCold);
 #endif
       }
     }

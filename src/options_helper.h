@@ -37,7 +37,9 @@ inline int offset_of(T1 T2::*member) {
 static std::unordered_map<std::string, MemberTypeInfo> mutable_db_options_member_type_info = {
     {"max_background_jobs", {offsetof(struct rocksdb::DBOptions, max_background_jobs), MemberType::kInt}},
     {"max_background_compactions", {offsetof(struct rocksdb::DBOptions, max_background_compactions), MemberType::kInt}},
+  #if ROCKSDB_MAJOR < 7
     {"base_background_compactions", {offsetof(struct rocksdb::DBOptions, base_background_compactions), MemberType::kInt}},
+  #endif
     {"max_open_files", {offsetof(struct rocksdb::DBOptions, max_open_files), MemberType::kInt}},
     {"bytes_per_sync", {offsetof(struct rocksdb::DBOptions, bytes_per_sync), MemberType::kUint64T}},
     {"delayed_write_rate", {offsetof(struct rocksdb::DBOptions, delayed_write_rate), MemberType::kUint64T}},
