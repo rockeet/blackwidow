@@ -54,7 +54,7 @@ class ZSetsScoreKey {
 #ifdef TOPLING_KEY_FORMAT
     dst = encode_00_0n(key_.data_, key_.end(), dst, dst+ksize+nzero+2, 1);
     ROCKSDB_VERIFY_EQ(size_t(dst-start_), ksize+nzero+2);
-    unaligned_save(dst, VALUE_OF_BYTE_SWAP_IF_LITTLE_ENDIAN(version_));
+    unaligned_save(dst, BIG_ENDIAN_OF(version_));
     dst = (char*)encode_memcmp_double(score_, (unsigned char*)dst + 4);
 #else
     EncodeFixed32(dst, key_.size());
@@ -94,7 +94,7 @@ class ParsedZSetsScoreKey {
     char* oend = decode_00_0n(ptr, &ptr, obeg, obeg + cap);
     ROCKSDB_VERIFY_LT(size_t(ptr - key.data_), key.size_);
     key_ = Slice(obeg, oend - obeg);
-    version_ = VALUE_OF_BYTE_SWAP_IF_LITTLE_ENDIAN(unaligned_load<int32_t>(ptr));
+    version_ = BIG_ENDIAN_OF(unaligned_load<int32_t>(ptr));
     ptr = (char*)decode_memcmp_double((unsigned char*)ptr + 4, &score_);
 #else
     int32_t key_len = DecodeFixed32(ptr);

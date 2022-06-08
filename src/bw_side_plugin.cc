@@ -55,9 +55,9 @@ using namespace terark;
 #define WARN(...) PrintLog(1, "WARN: " __VA_ARGS__)
 
 
-ROCKSDB_REG_DEFAULT_CONS( BaseMetaFilterFactory, CompactionFilterFactory);
-ROCKSDB_REG_DEFAULT_CONS(ListsMetaFilterFactory, CompactionFilterFactory);
-ROCKSDB_REG_DEFAULT_CONS(  StringsFilterFactory, CompactionFilterFactory);
+ROCKSDB_REG_Plugin( BaseMetaFilterFactory, CompactionFilterFactory);
+ROCKSDB_REG_Plugin(ListsMetaFilterFactory, CompactionFilterFactory);
+ROCKSDB_REG_Plugin(  StringsFilterFactory, CompactionFilterFactory);
 
 
 BaseDataFilter::~BaseDataFilter() {
@@ -112,7 +112,7 @@ struct FilterFac : public Base {
   CreateCompactionFilter(const CompactionFilterContext&) final;
 };
 #define BW_RegFilterFac(Class) using Class##JS = FilterFac<Class>; \
-  ROCKSDB_REG_JSON_REPO_CONS(#Class, Class##JS, CompactionFilterFactory)
+  ROCKSDB_REG_Plugin(#Class, Class##JS, CompactionFilterFactory)
 
 BW_RegFilterFac(  BaseDataFilterFactory);
 BW_RegFilterFac( ListsDataFilterFactory);
@@ -626,7 +626,7 @@ struct DataFilterFactorySerDe : SerDeFunc<CompactionFilterFactory> {
 
 #define RegDataFilterFactorySerDe(Factory, Parsed) \
 using Factory##SerDe = DataFilterFactorySerDe<Factory, Parsed>; \
-ROCKSDB_REG_JSON_REPO_CONS_3(#Factory, Factory##SerDe, \
+ROCKSDB_REG_Plugin_3(#Factory, Factory##SerDe, \
                              SerDeFunc<CompactionFilterFactory>)
 
 RegDataFilterFactorySerDe(BaseDataFilterFactory, ParsedBaseMetaValue);
@@ -675,7 +675,7 @@ struct BaseDataKeyDecoder : public UserKeyCoder {
     }
   }
 };
-ROCKSDB_REG_DEFAULT_CONS(BaseDataKeyDecoder, AnyPlugin);
+ROCKSDB_REG_Plugin(BaseDataKeyDecoder, AnyPlugin);
 ROCKSDB_REG_AnyPluginManip("BaseDataKeyDecoder");
 
 struct ZSetsScoreKeyDecoder : public UserKeyCoder {
@@ -695,7 +695,7 @@ struct ZSetsScoreKeyDecoder : public UserKeyCoder {
     if (end + 8 <= coded.end()) {
       HtmlAppendEscape(de, coded.begin(), end - 2 - coded.begin());
       de->append("<em>:");
-      AppendIsoDateTime(de, VALUE_OF_BYTE_SWAP_IF_LITTLE_ENDIAN(unaligned_load<int32_t>(end)));
+      AppendIsoDateTime(de, BIG_ENDIAN_OF(unaligned_load<int32_t>(end)));
       de->append(":</em>");
       double score = 0;
       decode_memcmp_double((unsigned char*)end + 4, &score);
@@ -708,7 +708,7 @@ struct ZSetsScoreKeyDecoder : public UserKeyCoder {
       HtmlAppendEscape(de, coded.begin(), end - 2 - coded.begin());
       de->append("<em>:");
       if (end + 4 <= coded.end()) {
-        AppendIsoDateTime(de, VALUE_OF_BYTE_SWAP_IF_LITTLE_ENDIAN(unaligned_load<int32_t>(end)));
+        AppendIsoDateTime(de, BIG_ENDIAN_OF(unaligned_load<int32_t>(end)));
       }
       else {
         de->append("&lt;EMPTY&gt;");
@@ -722,7 +722,7 @@ struct ZSetsScoreKeyDecoder : public UserKeyCoder {
     }
   }
 };
-ROCKSDB_REG_DEFAULT_CONS(ZSetsScoreKeyDecoder, AnyPlugin);
+ROCKSDB_REG_Plugin(ZSetsScoreKeyDecoder, AnyPlugin);
 ROCKSDB_REG_AnyPluginManip("ZSetsScoreKeyDecoder");
 
 struct ListsDataKeyDecoder : public UserKeyCoder {
@@ -742,7 +742,7 @@ struct ListsDataKeyDecoder : public UserKeyCoder {
     if (end + 4 <= coded.end()) {
       HtmlAppendEscape(de, coded.begin(), end - 2 - coded.begin());
       de->append("<em>:");
-      AppendIsoDateTime(de, VALUE_OF_BYTE_SWAP_IF_LITTLE_ENDIAN(unaligned_load<int32_t>(end)));
+      AppendIsoDateTime(de, BIG_ENDIAN_OF(unaligned_load<int32_t>(end)));
       de->append(":</em>");
       de->append(Slice(end + 4, coded.end() - (end + 4)).ToString(true));
     }
@@ -760,7 +760,7 @@ struct ListsDataKeyDecoder : public UserKeyCoder {
     }
   }
 };
-ROCKSDB_REG_DEFAULT_CONS(ListsDataKeyDecoder, AnyPlugin);
+ROCKSDB_REG_Plugin(ListsDataKeyDecoder, AnyPlugin);
 ROCKSDB_REG_AnyPluginManip("ListsDataKeyDecoder");
 
 template <class FilterFactory>
