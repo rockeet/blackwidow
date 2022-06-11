@@ -80,8 +80,8 @@ class ParsedListsDataKey {
     char* oend = decode_00_0n(ptr, &ptr, obeg, obeg + cap);
     ROCKSDB_VERIFY_LT(size_t(ptr - key.data_), key.size_);
     key_ = Slice(obeg, oend - obeg);
-    version_ = BIG_ENDIAN_OF(unaligned_load<int32_t>(ptr));
-    index_ = BIG_ENDIAN_OF(unaligned_load<uint64_t>(ptr+4));
+    version_ = NATIVE_OF_BIG_ENDIAN(unaligned_load<int32_t>(ptr));
+    index_ = NATIVE_OF_BIG_ENDIAN(unaligned_load<uint64_t>(ptr+4));
 #else
     int32_t key_len = DecodeFixed32(ptr);
     ptr += sizeof(int32_t);

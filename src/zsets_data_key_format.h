@@ -94,7 +94,7 @@ class ParsedZSetsScoreKey {
     char* oend = decode_00_0n(ptr, &ptr, obeg, obeg + cap);
     ROCKSDB_VERIFY_LT(size_t(ptr - key.data_), key.size_);
     key_ = Slice(obeg, oend - obeg);
-    version_ = BIG_ENDIAN_OF(unaligned_load<int32_t>(ptr));
+    version_ = NATIVE_OF_BIG_ENDIAN(unaligned_load<int32_t>(ptr));
     ptr = (char*)decode_memcmp_double((unsigned char*)ptr + 4, &score_);
 #else
     int32_t key_len = DecodeFixed32(ptr);
