@@ -616,6 +616,8 @@ Status RedisStrings::MGet(const std::vector<std::string>& keys,
   }
   auto cfh = db_->DefaultColumnFamily();
   ReadOptionsAutoSnapshot read_options(db_);
+  read_options.async_io = true;
+  read_options.async_queue_depth = 128;
   db_->MultiGet(read_options, cfh, num, ks.p, ps.data(), ss.data());
   auto vssd = vss->data();
   time_t now_time = ::time(nullptr);
@@ -678,6 +680,8 @@ Status RedisStrings::MSetnx(const std::vector<KeyValue>& kvs,
   for (size_t i = 0; i < num; ++i) ks.p[i] = kvs[i].key;
   auto cfh = db_->DefaultColumnFamily();
   ReadOptionsAutoSnapshot read_options(db_);
+  read_options.async_io = true;
+  read_options.async_queue_depth = 128;
   db_->MultiGet(read_options, cfh, num, ks.p, ps.data(), ss.data());
   time_t now_time = ::time(nullptr);
   for (size_t i = 0; i < num; ++i) {

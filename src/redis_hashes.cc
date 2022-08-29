@@ -576,6 +576,8 @@ Status RedisHashes::HMGet(const Slice& key,
         fields_key_data.unchecked_emplace_back(key, version, fields[i]);
         fields_key_ref.p[i] = fields_key_data[i].Encode();
       }
+      read_options.async_io = true;
+      read_options.async_queue_depth = 128;
       db_->MultiGet(read_options, handles_[1], num,
             fields_key_ref.p, values_data.data(), status_vec.data());
       for (size_t i = 0; i < num; ++i) {
@@ -652,6 +654,8 @@ Status RedisHashes::HMSet(const Slice& key,
       }
       auto rdopt = default_read_options_;
       rdopt.just_check_key_exists = true;
+      rdopt.async_io = true;
+      rdopt.async_queue_depth = 128;
       db_->MultiGet(rdopt, handles_[1], num,
             fields_key_ref.p, values_data.data(), status_vec.data());
       for (size_t i = 0; i < num; ++i) {
