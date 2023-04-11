@@ -167,6 +167,11 @@ Status BlackWidow::Open(const BlackwidowOptions& bw_options,
           "[FATAL] StartHttpServer failed, %s\n", s.ToString().c_str());
       exit(-1);
     }
+    strings_db_->EnableAutoCompaction();
+    hashes_db_->EnableAutoCompaction();
+    sets_db_->EnableAutoCompaction();
+    lists_db_->EnableAutoCompaction();
+    zsets_db_->EnableAutoCompaction();
   }
   return Status::OK();
 }

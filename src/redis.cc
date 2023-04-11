@@ -49,9 +49,12 @@ Status Redis::OpenByRepo(const BlackwidowOptions& bw_options,
     handles_ = dbm->cf_handles;
     ROCKSDB_VERIFY_F(db_path == db_->GetName(), "type = %s : %s != %s",
        type.c_str(), db_path.c_str(), db_->GetName().c_str());
-    std::thread([=]{db_->EnableAutoCompaction(dbm->cf_handles);}).detach();
   }
   return s;
+}
+
+void Redis::EnableAutoCompaction() {
+  db_->EnableAutoCompaction(handles_);
 }
 
 Status Redis::GetScanStartPoint(const Slice& key,
