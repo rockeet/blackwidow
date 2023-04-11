@@ -23,6 +23,9 @@ Redis::Redis(BlackWidow* const bw, const DataType& type)
 }
 
 Redis::~Redis() {
+  rocksdb::FlushOptions fo;
+  fo.allow_write_stall = true;
+  db_->Flush(fo, handles_); // ignore error
   std::vector<rocksdb::ColumnFamilyHandle*> tmp_handles = handles_;
   handles_.clear();
   for (auto handle : tmp_handles) {
