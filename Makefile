@@ -85,7 +85,7 @@ default: all
 
 WARNING_FLAGS = -W -Wextra -Wall -Wsign-compare \
   -Wno-unused-parameter -Wno-redundant-decls -Wwrite-strings \
-	-Wpointer-arith -Wreorder -Wswitch -Wsign-promo \
+	-Wpointer-arith -Wreorder -Wswitch -Wno-sign-promo \
 	-Woverloaded-virtual -Wnon-virtual-dtor -Wno-missing-field-initializers
 
 ifndef DISABLE_WARNING_AS_ERROR
