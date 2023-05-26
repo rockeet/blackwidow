@@ -17,7 +17,23 @@
 #include "src/lru_cache.h"
 #include "topling/side_plugin_repo.h"
 
+namespace rocksdb {
+__attribute__((weak)) void TopTableSetSeqScan(bool val);
+}
 namespace blackwidow {
+
+struct ScopeTopTableSeqScan {
+  ScopeTopTableSeqScan();
+  ~ScopeTopTableSeqScan();
+};
+ScopeTopTableSeqScan::ScopeTopTableSeqScan() {
+  if (rocksdb::TopTableSetSeqScan)
+      rocksdb::TopTableSetSeqScan(true);
+}
+ScopeTopTableSeqScan::~ScopeTopTableSeqScan() {
+  if (rocksdb::TopTableSetSeqScan)
+      rocksdb::TopTableSetSeqScan(false);
+}
 
 Status BlackwidowOptions::ResetOptions(const OptionType& option_type,
     const std::unordered_map<std::string, std::string>& options_map) {
@@ -389,6 +405,7 @@ Status BlackWidow::HScan(const Slice& key, int64_t cursor,
                          const std::string& pattern, int64_t count,
                          std::vector<FieldValue>* field_values,
                          int64_t* next_cursor) {
+  ScopeTopTableSeqScan seqscan;
   return hashes_db_->HScan(key, cursor,
       pattern, count, field_values, next_cursor);
 }
@@ -397,6 +414,7 @@ Status BlackWidow::HScanx(const Slice& key, const std::string start_field,
                           const std::string& pattern, int64_t count,
                           std::vector<FieldValue>* field_values,
                           std::string* next_field) {
+  ScopeTopTableSeqScan seqscan;
   return hashes_db_->HScanx(key, start_field,
       pattern, count, field_values, next_field);
 }
@@ -406,6 +424,7 @@ Status BlackWidow::PKHScanRange(const Slice& key, const Slice& field_start,
                                 const Slice& pattern, int32_t limit,
                                 std::vector<FieldValue>* field_values,
                                 std::string* next_field) {
+  ScopeTopTableSeqScan seqscan;
   return hashes_db_->PKHScanRange(key, field_start,
       field_end, pattern, limit, field_values, next_field);
 }
@@ -415,6 +434,7 @@ Status BlackWidow::PKHRScanRange(const Slice& key, const Slice& field_start,
                                  const Slice& pattern, int32_t limit,
                                  std::vector<FieldValue>* field_values,
                                  std::string* next_field) {
+  ScopeTopTableSeqScan seqscan;
   return hashes_db_->PKHRScanRange(key, field_start,
       field_end, pattern, limit, field_values, next_field);
 }
@@ -605,6 +625,7 @@ Status BlackWidow::ZCount(const Slice& key,
                           bool left_close,
                           bool right_close,
                           int32_t* ret) {
+  ScopeTopTableSeqScan seqscan;
   return zsets_db_->ZCount(key, min, max, left_close, right_close, ret);
 }
 
@@ -619,6 +640,7 @@ Status BlackWidow::ZRange(const Slice& key,
                           int32_t start,
                           int32_t stop,
                           std::vector<ScoreMember>* score_members) {
+  ScopeTopTableSeqScan seqscan;
   return zsets_db_->ZRange(key, start, stop, score_members);
 }
 
@@ -628,6 +650,7 @@ Status BlackWidow::ZRangebyscore(const Slice& key,
                                  bool left_close,
                                  bool right_close,
                                  std::vector<ScoreMember>* score_members) {
+  ScopeTopTableSeqScan seqscan;
   // maximum number of zset is std::numeric_limits<int32_t>::max()
   return zsets_db_->ZRangebyscore(key, min, max,
       left_close, right_close, std::numeric_limits<int32_t>::max(), 0, score_members);
@@ -641,6 +664,7 @@ Status BlackWidow::ZRangebyscore(const Slice& key,
                                  int64_t count,
                                  int64_t offset,
                                  std::vector<ScoreMember>* score_members) {
+  ScopeTopTableSeqScan seqscan;
   return zsets_db_->ZRangebyscore(key, min, max,
       left_close, right_close, count, offset, score_members);
 }
@@ -661,6 +685,7 @@ Status BlackWidow::ZRemrangebyrank(const Slice& key,
                                    int32_t start,
                                    int32_t stop,
                                    int32_t* ret) {
+  ScopeTopTableSeqScan seqscan;
   return zsets_db_->ZRemrangebyrank(key, start, stop, ret);
 }
 
@@ -670,6 +695,7 @@ Status BlackWidow::ZRemrangebyscore(const Slice& key,
                                     bool left_close,
                                     bool right_close,
                                     int32_t* ret) {
+  ScopeTopTableSeqScan seqscan;
   return zsets_db_->ZRemrangebyscore(key, min, max,
       left_close, right_close, ret);
 }
@@ -682,6 +708,7 @@ Status BlackWidow::ZRevrangebyscore(const Slice& key,
                                     int64_t count,
                                     int64_t offset,
                                     std::vector<ScoreMember>* score_members) {
+  ScopeTopTableSeqScan seqscan;
   return zsets_db_->ZRevrangebyscore(key, min, max,
       left_close, right_close, count, offset, score_members);
 }
@@ -690,6 +717,7 @@ Status BlackWidow::ZRevrange(const Slice& key,
                              int32_t start,
                              int32_t stop,
                              std::vector<ScoreMember>* score_members) {
+  ScopeTopTableSeqScan seqscan;
   return zsets_db_->ZRevrange(key, start, stop, score_members);
 }
 
@@ -699,6 +727,7 @@ Status BlackWidow::ZRevrangebyscore(const Slice& key,
                                     bool left_close,
                                     bool right_close,
                                     std::vector<ScoreMember>* score_members) {
+  ScopeTopTableSeqScan seqscan;
   // maximum number of zset is std::numeric_limits<int32_t>::max()
   return zsets_db_->ZRevrangebyscore(key, min, max,
       left_close, right_close, std::numeric_limits<int32_t>::max(), 0, score_members);
@@ -738,6 +767,7 @@ Status BlackWidow::ZRangebylex(const Slice& key,
                                bool left_close,
                                bool right_close,
                                std::vector<std::string>* members) {
+  ScopeTopTableSeqScan seqscan;
   return zsets_db_->ZRangebylex(key, min, max,
       left_close, right_close, members);
 }
@@ -757,6 +787,7 @@ Status BlackWidow::ZRemrangebylex(const Slice& key,
                                   bool left_close,
                                   bool right_close,
                                   int32_t* ret) {
+  ScopeTopTableSeqScan seqscan;
   return zsets_db_->ZRemrangebylex(key, min, max, left_close, right_close, ret);
 }
 
@@ -764,6 +795,7 @@ Status BlackWidow::ZScan(const Slice& key, int64_t cursor,
                          const std::string& pattern, int64_t count,
                          std::vector<ScoreMember>* score_members,
                          int64_t* next_cursor) {
+  ScopeTopTableSeqScan seqscan;
   return zsets_db_->ZScan(key, cursor,
       pattern, count, score_members, next_cursor);
 }
@@ -1026,6 +1058,7 @@ int64_t BlackWidow::Exists(const std::vector<std::string>& keys,
 int64_t BlackWidow::Scan(const DataType& dtype, int64_t cursor,
                          const std::string& pattern, int64_t count,
                          std::vector<std::string>* keys) {
+  ScopeTopTableSeqScan seqscan;
   keys->clear();
   bool is_finish;
   int64_t leftover_visits = count;
@@ -1145,6 +1178,7 @@ int64_t BlackWidow::Scan(const DataType& dtype, int64_t cursor,
 int64_t BlackWidow::PKExpireScan(const DataType& dtype, int64_t cursor,
                                  int32_t min_ttl, int32_t max_ttl,
                                  int64_t count, std::vector<std::string>* keys) {
+  ScopeTopTableSeqScan seqscan;
   keys->clear();
   bool is_finish;
   int64_t leftover_visits = count;
@@ -1269,6 +1303,7 @@ Status BlackWidow::PKScanRange(const DataType& data_type,
                                std::vector<std::string>* keys,
                                std::vector<KeyValue>* kvs,
                                std::string* next_key) {
+  ScopeTopTableSeqScan seqscan;
   Status s;
   keys->clear();
   next_key->clear();
@@ -1306,6 +1341,7 @@ Status BlackWidow::PKRScanRange(const DataType& data_type,
                                 std::vector<std::string>* keys,
                                 std::vector<KeyValue>* kvs,
                                 std::string* next_key) {
+  ScopeTopTableSeqScan seqscan;
   Status s;
   keys->clear();
   next_key->clear();
@@ -1340,6 +1376,7 @@ Status BlackWidow::PKRScanRange(const DataType& data_type,
 Status BlackWidow::PKPatternMatchDel(const DataType& data_type,
                                      const std::string& pattern,
                                      int32_t* ret) {
+  ScopeTopTableSeqScan seqscan;
   Status s;
   switch (data_type) {
     case DataType::kStrings:
@@ -1607,6 +1644,7 @@ Status BlackWidow::Type(const std::string &key, std::string* type) {
 Status BlackWidow::Keys(const DataType& data_type,
                         const std::string& pattern,
                         std::vector<std::string>* keys) {
+  ScopeTopTableSeqScan seqscan;
   Status s;
   if (data_type == DataType::kStrings) {
     s = strings_db_->ScanKeys(pattern, keys);
@@ -1639,6 +1677,7 @@ Status BlackWidow::Keys(const DataType& data_type,
 }
 
 void BlackWidow::ScanDatabase(const DataType& type) {
+  ScopeTopTableSeqScan seqscan;
   switch (type) {
     case kStrings:
         strings_db_->ScanDatabase();
@@ -1972,6 +2011,7 @@ uint64_t BlackWidow::GetProperty(const std::string& db_type,
 }
 
 Status BlackWidow::GetKeyNum(std::vector<KeyInfo>* key_infos) {
+  ScopeTopTableSeqScan seqscan;
   KeyInfo key_info;
   // NOTE: keep the db order with string, hash, list, zset, set
   std::vector<Redis*> dbs = {strings_db_, hashes_db_,
