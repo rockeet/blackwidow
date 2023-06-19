@@ -47,6 +47,12 @@ Status Redis::OpenByRepo(const BlackwidowOptions& bw_options,
   if (s.ok()) {
     db_ = dbm->db;
     handles_ = dbm->cf_handles;
+    for (auto cfh : handles_) {
+      rocksdb::ColumnFamilyDescriptor desc;
+      cfh->GetDescriptor(&desc);
+      ROCKSDB_VERIFY(desc.options.disable_auto_compactions);
+    }
+    // db_->EnableAutoCompaction(handles_);
     ROCKSDB_VERIFY_F(db_path == db_->GetName(), "type = %s : %s != %s",
        type.c_str(), db_path.c_str(), db_->GetName().c_str());
   }
