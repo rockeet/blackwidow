@@ -448,7 +448,7 @@ BW_SideNewFilter(BaseDataFilter);
 BW_SideNewFilter(ListsDataFilter);
 BW_SideNewFilter(ZSetsScoreFilter);
 
-std::string decode_00_0n(Slice src) {
+std::string decode_01_00(Slice src) {
   if (src.empty()) {
     return std::string(); // empty
   }
@@ -456,8 +456,9 @@ std::string decode_00_0n(Slice src) {
   auto src_ptr = src.end();
   auto dst_beg = &dst[0];
   auto dst_end = &dst[0] + dst.size();
-  dst_end = decode_00_0n(src.begin(), &src_ptr, dst_beg, dst_end);
+  dst_end = decode_01_00(src.begin(), &src_ptr, dst_beg, dst_end);
   ROCKSDB_VERIFY_LE(size_t(src_ptr - src.begin()), src.size_);
+  ROCKSDB_VERIFY_EQ(src_ptr[-1], 0);
   dst.resize(dst_end - dst_beg);
   return dst;
 }
@@ -504,8 +505,8 @@ size_t write_ttl_file(const CompactionParams& cp,
                  VersionTimestamp (*decode)(std::string*))
 {
   Logger* info_log = cp.info_log;
-  const std::string start = decode_00_0n(cp.smallest_user_key);
-  const std::string bound = decode_00_0n(cp.largest_user_key);
+  const std::string start = decode_01_00(cp.smallest_user_key);
+  const std::string bound = decode_01_00(cp.largest_user_key);
   using namespace std::chrono;
   auto t0 = steady_clock::now();
   size_t bytes = 0, num = 0;
@@ -653,7 +654,7 @@ struct BaseDataKeyDecoder : public UserKeyCoder {
   }
   void Decode(Slice coded, std::string* de) const override {
     de->clear();
-    auto end = terark::end_of_00_0n(coded.begin(), coded.end());
+    auto end = terark::end_of_01_00(coded.begin(), coded.end());
     if (end + 4 <= coded.end()) {
       HtmlAppendEscape(de, coded.begin(), end - 2 - coded.begin());
       de->append("<em>:");
@@ -691,7 +692,7 @@ struct ZSetsScoreKeyDecoder : public UserKeyCoder {
   }
   void Decode(Slice coded, std::string* de) const override {
     de->clear();
-    auto end = terark::end_of_00_0n(coded.begin(), coded.end());
+    auto end = terark::end_of_01_00(coded.begin(), coded.end());
     if (end + 8 <= coded.end()) {
       HtmlAppendEscape(de, coded.begin(), end - 2 - coded.begin());
       de->append("<em>:");
@@ -738,7 +739,7 @@ struct ListsDataKeyDecoder : public UserKeyCoder {
   }
   void Decode(Slice coded, std::string* de) const override {
     de->clear();
-    auto end = terark::end_of_00_0n(coded.begin(), coded.end());
+    auto end = terark::end_of_01_00(coded.begin(), coded.end());
     if (end + 4 <= coded.end()) {
       HtmlAppendEscape(de, coded.begin(), end - 2 - coded.begin());
       de->append("<em>:");

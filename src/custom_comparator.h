@@ -26,8 +26,8 @@ class ListsDataKeyComparatorImpl : public rocksdb::Comparator {
     int32_t a_size = static_cast<int32_t>(a.size());
     int32_t b_size = static_cast<int32_t>(b.size());
   #ifdef TOPLING_KEY_FORMAT
-    const char*  kend_a = end_of_00_0n(ptr_a);
-    const char*  kend_b = end_of_00_0n(ptr_b);
+    const char*  kend_a = end_of_01_00(ptr_a);
+    const char*  kend_b = end_of_01_00(ptr_b);
     const size_t klen_a = kend_a - ptr_a;
     const size_t klen_b = kend_b - ptr_b;
     ROCKSDB_VERIFY_EQ(klen_a + 12, a.size_);
@@ -127,8 +127,8 @@ class ZSetsScoreKeyComparatorImpl : public rocksdb::Comparator {
     int32_t a_size = static_cast<int32_t>(a.size());
     int32_t b_size = static_cast<int32_t>(b.size());
 #ifdef TOPLING_KEY_FORMAT
-    const char*  kend_a = end_of_00_0n(ptr_a);
-    const char*  kend_b = end_of_00_0n(ptr_b);
+    const char*  kend_a = end_of_01_00(ptr_a);
+    const char*  kend_b = end_of_01_00(ptr_b);
     const size_t klen_a = kend_a - ptr_a + 4; // 4B is version
     const size_t klen_b = kend_b - ptr_b + 4;
     ROCKSDB_VERIFY_LE(klen_a + 8, a.size_);
@@ -193,8 +193,9 @@ class ZSetsScoreKeyComparatorImpl : public rocksdb::Comparator {
 
 #ifdef TOPLING_KEY_FORMAT
     std::string key(str.size() - 4 - 8 - 2, '\0');
-    char* dk_end = decode_00_0n(ptr, &ptr, &key[0], &key[0] + key.size());
+    char* dk_end = decode_01_00(ptr, &ptr, &key[0], &key[0] + key.size());
     ROCKSDB_VERIFY_LE(size_t(ptr - str.data()), str.size() - 4 - 8);
+    ROCKSDB_VERIFY_EQ(ptr[-1], 0);
     int32_t key_len = int32_t(dk_end - &key[0]);
     key.resize(key_len);
 #else

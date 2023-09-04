@@ -17,9 +17,9 @@
 namespace blackwidow {
 
 #define TOPLING_KEY_FORMAT
-using terark::encode_00_0n;
-using terark::decode_00_0n;
-using terark::end_of_00_0n;
+using terark::encode_0_01_00;
+using terark::decode_01_00;
+using terark::end_of_01_00;
 using terark::encode_memcmp_double;
 using terark::decode_memcmp_double;
 

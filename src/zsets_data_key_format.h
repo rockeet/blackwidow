@@ -52,7 +52,7 @@ class ZSetsScoreKey {
     }
     start_ = dst;
 #ifdef TOPLING_KEY_FORMAT
-    dst = encode_00_0n(key_.data_, key_.end(), dst, dst+ksize+nzero+2, 1);
+    dst = encode_0_01_00(key_.data_, key_.end(), dst, dst+ksize+nzero+2);
     ROCKSDB_VERIFY_EQ(size_t(dst-start_), ksize+nzero+2);
     unaligned_save(dst, BIG_ENDIAN_OF(version_));
     dst = (char*)encode_memcmp_double(score_, (unsigned char*)dst + 4);
@@ -88,11 +88,13 @@ class ParsedZSetsScoreKey {
   ParsedZSetsScoreKey(Slice key, std::string* parse_buf) {
     const char* ptr = key.data();
 #ifdef TOPLING_KEY_FORMAT
+    ROCKSDB_VERIFY_GE(key.size_, 2);
     size_t cap = key.size_ - 2;
     parse_buf->resize(cap);
     char* obeg = parse_buf->data();
-    char* oend = decode_00_0n(ptr, &ptr, obeg, obeg + cap);
+    char* oend = decode_01_00(ptr, &ptr, obeg, obeg + cap);
     ROCKSDB_VERIFY_LT(size_t(ptr - key.data_), key.size_);
+    ROCKSDB_VERIFY_EQ(ptr[-1], 0);
     key_ = Slice(obeg, oend - obeg);
     version_ = NATIVE_OF_BIG_ENDIAN(unaligned_load<int32_t>(ptr));
     ptr = (char*)decode_memcmp_double((unsigned char*)ptr + 4, &score_);

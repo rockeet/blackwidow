@@ -37,7 +37,7 @@ class BaseMetaFilter : public rocksdb::CompactionFilter {
   bool Filter(int level, const rocksdb::Slice& key,
               const rocksdb::Slice& value,
               std::string* new_value, bool* value_changed) const override {
-    
+
     fl_cnt.exec_filter_times++;
 
     int32_t cur_time = static_cast<int32_t>(unix_time);
@@ -107,7 +107,7 @@ class BaseDataFilter : public rocksdb::CompactionFilter {
   bool Filter(int level, const Slice& key,
               const rocksdb::Slice& value,
               std::string* new_value, bool* value_changed) const override {
-    
+
     fl_cnt.exec_filter_times++;
 
     if (nullptr == db_ || nullptr == cf_handles_ptr_) {
@@ -129,7 +129,7 @@ class BaseDataFilter : public rocksdb::CompactionFilter {
         return false;
       }
     #if 0
-      std::string meta_key = decode_00_0n(key);
+      std::string meta_key = decode_01_00(key);
       if (!iter_) {
         iter_ = NewMetaIter(db_, (*cf_handles_ptr_)[0], smallest_seqno_);
         ROCKSDB_VERIFY(nullptr != iter_);

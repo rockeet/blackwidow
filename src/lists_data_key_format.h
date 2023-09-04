@@ -43,7 +43,7 @@ class ListsDataKey {
     }
     start_ = dst;
 #ifdef TOPLING_KEY_FORMAT
-    dst = encode_00_0n(key_.data_, key_.end(), dst, dst+usize+nzero+2, 1);
+    dst = encode_0_01_00(key_.data_, key_.end(), dst, dst+usize+nzero+2);
     ROCKSDB_VERIFY_EQ(size_t(dst-start_), usize+nzero+2);
     unaligned_save(dst + 0, BIG_ENDIAN_OF(version_));
     unaligned_save(dst + 4, BIG_ENDIAN_OF(index_));
@@ -77,8 +77,9 @@ class ParsedListsDataKey {
     size_t cap = key.size_ - 2;
     parse_buf->resize(cap);
     char* obeg = parse_buf->data();
-    char* oend = decode_00_0n(ptr, &ptr, obeg, obeg + cap);
+    char* oend = decode_01_00(ptr, &ptr, obeg, obeg + cap);
     ROCKSDB_VERIFY_LT(size_t(ptr - key.data_), key.size_);
+    ROCKSDB_VERIFY_EQ(ptr[-1], 0);
     key_ = Slice(obeg, oend - obeg);
     version_ = NATIVE_OF_BIG_ENDIAN(unaligned_load<int32_t>(ptr));
     index_ = NATIVE_OF_BIG_ENDIAN(unaligned_load<uint64_t>(ptr+4));
