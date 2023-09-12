@@ -1184,16 +1184,11 @@ void CompactExecFactoryToJson(const CompactionExecutorFactory* fac,
 }
 
 namespace blackwidow {
-struct MetaDBCF {
-  DB* db;
-  ColumnFamilyHandle* meta_cfh;
-};
 static std::mutex g_data_to_meta_cf_mtx;
-static std::map<const ColumnFamilyData*, MetaDBCF> g_data_to_meta_cf;
-void SetDataToMetaMap(const ColumnFamilyData* data_cfd,
-                      DB* db, ColumnFamilyHandle* meta_cfh) {
+static std::map<const ColumnFamilyData*, DB*> g_data_to_meta_cf;
+void SetDataToMetaMap(const ColumnFamilyData* data_cfd, DB* db) {
   std::lock_guard<std::mutex> lk(g_data_to_meta_cf_mtx);
-  g_data_to_meta_cf[data_cfd] = {db, meta_cfh};
+  g_data_to_meta_cf[data_cfd] = db;
 }
 
 struct BwDcompactExecFactory : CompactionExecutorFactory {
@@ -1237,10 +1232,10 @@ struct BwDcompactExecFactory : CompactionExecutorFactory {
     auto data_cfd = c->column_family_data();
     auto iter = g_data_to_meta_cf.find(data_cfd);
     TERARK_VERIFY(g_data_to_meta_cf.end() != iter);
-    MetaDBCF dbcf = iter->second;
+    DB* db = iter->second;
     Range rng(c->GetSmallestUserKey(), c->GetLargestUserKey());
     uint64_t meta_size = 0;
-    Status s = dbcf.db->GetApproximateSizes(&rng, 1, &meta_size);
+    Status s = db->GetApproximateSizes(&rng, 1, &meta_size); // default cf
     size_t input_size = 0;
     for (auto& lev : *c->inputs()) {
       for (auto& file : lev.files)
