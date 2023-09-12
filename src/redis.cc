@@ -52,6 +52,16 @@ Status Redis::OpenByRepo(const BlackwidowOptions& bw_options,
       cfh->GetDescriptor(&desc);
       ROCKSDB_VERIFY(desc.options.disable_auto_compactions);
     }
+    using namespace rocksdb;
+    void SetDataToMetaMap(const ColumnFamilyData* data_cfd,
+                          DB* db, ColumnFamilyHandle* meta_cfh);
+    if (type == "hashes" || type == "sets" || type == "lists") {
+      SetDataToMetaMap(handles_[1]->cfd(), db_, handles_[0]);
+    }
+    else if (type == "zsets") {
+      SetDataToMetaMap(handles_[1]->cfd(), db_, handles_[0]);
+      SetDataToMetaMap(handles_[2]->cfd(), db_, handles_[0]);
+    }
     // db_->EnableAutoCompaction(handles_);
     ROCKSDB_VERIFY_F(db_path == db_->GetName(), "type = %s : %s != %s",
        type.c_str(), db_path.c_str(), db_->GetName().c_str());

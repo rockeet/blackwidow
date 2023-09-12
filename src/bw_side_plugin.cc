@@ -2,6 +2,7 @@
 #include <terark/io/DataIO.hpp>
 #include <terark/io/FileStream.hpp>
 #include <terark/io/StreamBuffer.hpp>
+#include <terark/util/atomic.hpp>
 #include <terark/util/process.hpp>
 #include <logging/logging.h>
 #include <rocksdb/db.h>
@@ -1171,6 +1172,105 @@ ROCKSDB_REG_PluginManip("ListsMetaFilterFactory", ListsMetaFilterFactory_Manip);
 ROCKSDB_REG_PluginManip("ListsDataFilterFactory", ListsDataFilterFactory_Manip);
 ROCKSDB_REG_PluginManip("ZSetsScoreFilterFactory", ZSetsScoreFilterFactory_Manip);
 ROCKSDB_REG_PluginManip("StringsFilterFactory", StringsFilterFactory_Manip);
+} // namespace blackwidow
+
+
+namespace rocksdb {
+// defined in dcompact_executor.cc
+__attribute__((weak))
+void CompactExecFactoryToJson(const CompactionExecutorFactory* fac,
+                               const json& dump_options, json& djs,
+                               const SidePluginRepo& repo);
+}
+
+namespace blackwidow {
+struct MetaDBCF {
+  DB* db;
+  ColumnFamilyHandle* meta_cfh;
+};
+static std::mutex g_data_to_meta_cf_mtx;
+static std::map<const ColumnFamilyData*, MetaDBCF> g_data_to_meta_cf;
+void SetDataToMetaMap(const ColumnFamilyData* data_cfd,
+                      DB* db, ColumnFamilyHandle* meta_cfh) {
+  std::lock_guard<std::mutex> lk(g_data_to_meta_cf_mtx);
+  g_data_to_meta_cf[data_cfd] = {db, meta_cfh};
+}
+
+struct BwDcompactExecFactory : CompactionExecutorFactory {
+  std::string target_name;
+  double max_meta_size_ratio = 0.05;
+  mutable size_t num_total = 0;
+  mutable size_t num_target_run_local = 0;
+  mutable size_t num_meta_size_too_large = 0;
+
+  const SidePluginRepo* m_repo;
+  BwDcompactExecFactory(const json& js, const SidePluginRepo& repo) {
+    ROCKSDB_JSON_REQ_PROP(js, target_name);
+    ROCKSDB_JSON_OPT_PROP(js, max_meta_size_ratio);
+    m_repo = &repo;
+  }
+  void Update(const json&, const json& js, const SidePluginRepo& repo) {
+    ROCKSDB_JSON_OPT_PROP(js, max_meta_size_ratio);
+  }
+  std::string ToString(const json& d, const SidePluginRepo& repo) const {
+    std::shared_ptr<CompactionExecutorFactory> target = repo.Get(target_name);
+    TERARK_VERIFY_S(target != nullptr, "target_name = %s is not defined", target_name);
+    const bool html = JsonSmartBool(d, "html", true);
+    json djs;
+    json& bwj = djs["BlackWidow"];
+    ROCKSDB_JSON_SET_PROP(bwj, max_meta_size_ratio);
+    ROCKSDB_JSON_SET_PROP(bwj, num_total);
+    ROCKSDB_JSON_SET_PROP(bwj, num_target_run_local);
+    ROCKSDB_JSON_SET_PROP(bwj, num_meta_size_too_large);
+    ROCKSDB_JSON_SET_FACX(bwj, target, compaction_executor_factory);
+    if (CompactExecFactoryToJson)
+      CompactExecFactoryToJson(this, d, djs, repo);
+    return JsonToString(djs, d);
+  }
+  bool ShouldRunLocal(const Compaction* c) const {
+    std::shared_ptr<CompactionExecutorFactory> target = m_repo->Get(target_name);
+    TERARK_VERIFY_S(target != nullptr, "target_name = %s is not defined", target_name);
+    as_atomic(num_total).fetch_add(1, std::memory_order_relaxed);
+    if (target->ShouldRunLocal(c)) {
+      as_atomic(num_target_run_local).fetch_add(1, std::memory_order_relaxed);
+      return true;
+    }
+    auto data_cfd = c->column_family_data();
+    auto iter = g_data_to_meta_cf.find(data_cfd);
+    TERARK_VERIFY(g_data_to_meta_cf.end() != iter);
+    MetaDBCF dbcf = iter->second;
+    Range rng(c->GetSmallestUserKey(), c->GetLargestUserKey());
+    uint64_t meta_size = 0;
+    Status s = dbcf.db->GetApproximateSizes(&rng, 1, &meta_size);
+    size_t input_size = 0;
+    for (auto& lev : *c->inputs()) {
+      for (auto& file : lev.files)
+        input_size += file->fd.file_size;
+    }
+    // if meta_size is too large, run local
+    if (meta_size > input_size * max_meta_size_ratio) {
+      as_atomic(num_meta_size_too_large).fetch_add(1, std::memory_order_relaxed);
+      return true;
+    } else {
+      return false;
+    }
+  }
+  bool AllowFallbackToLocal() const {
+    std::shared_ptr<CompactionExecutorFactory> target = m_repo->Get(target_name);
+    TERARK_VERIFY_S(target != nullptr, "target_name = %s is not defined", target_name);
+    return target->AllowFallbackToLocal();
+  }
+  CompactionExecutor* NewExecutor(const Compaction* c) const {
+    std::shared_ptr<CompactionExecutorFactory> target = m_repo->Get(target_name);
+    TERARK_VERIFY_S(target != nullptr, "target_name = %s is not defined", target_name);
+    return target->NewExecutor(c);
+  }
+  const char* Name() const {
+    return "BwDcompactExec";
+  }
+};
+ROCKSDB_REG_Plugin("BwDcompactExec", BwDcompactExecFactory, CompactionExecutorFactory);
+ROCKSDB_REG_EasyProxyManip("BwDcompactExec", BwDcompactExecFactory, CompactionExecutorFactory);
 
 
 } // namespace blackwidow
