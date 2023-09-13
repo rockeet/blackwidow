@@ -1174,14 +1174,13 @@ ROCKSDB_REG_PluginManip("ZSetsScoreFilterFactory", ZSetsScoreFilterFactory_Manip
 ROCKSDB_REG_PluginManip("StringsFilterFactory", StringsFilterFactory_Manip);
 } // namespace blackwidow
 
-
 namespace rocksdb {
 // defined in dcompact_executor.cc
 // __attribute__((weak))
 void CompactExecFactoryToJson(const CompactionExecutorFactory* fac,
                                const json& dump_options, json& djs,
                                const SidePluginRepo& repo);
-}
+} // namespace rocksdb
 
 namespace blackwidow {
 static std::mutex g_data_to_meta_cf_mtx;
@@ -1190,29 +1189,25 @@ void SetDataToMetaMap(const ColumnFamilyData* data_cfd, DB* db) {
   std::lock_guard<std::mutex> lk(g_data_to_meta_cf_mtx);
   g_data_to_meta_cf[data_cfd] = db;
 }
-
 struct BwDcompactExecFactory : CompactionExecutorFactory {
-  std::string target_name;
+  std::shared_ptr<CompactionExecutorFactory> target;
   double max_meta_size_ratio = 0.05;
   mutable size_t num_total = 0;
   mutable size_t num_target_run_local = 0;
   mutable size_t num_meta_size_too_large = 0;
-
   const SidePluginRepo* m_repo;
   BwDcompactExecFactory(const json& js, const SidePluginRepo& repo) {
-    ROCKSDB_JSON_REQ_PROP(js, target_name);
+    ROCKSDB_JSON_OPT_FACT(js, target);
     ROCKSDB_JSON_OPT_PROP(js, max_meta_size_ratio);
+    TERARK_VERIFY_S(target != nullptr, "param target is required");
     m_repo = &repo;
   }
   void Update(const json&, const json& js, const SidePluginRepo& repo) {
     ROCKSDB_JSON_OPT_PROP(js, max_meta_size_ratio);
   }
   std::string ToString(const json& d, const SidePluginRepo& repo) const {
-    std::shared_ptr<CompactionExecutorFactory> target = repo.Get(target_name);
-    TERARK_VERIFY_S(target != nullptr, "target_name = %s is not defined", target_name);
     const bool html = JsonSmartBool(d, "html", true);
-    json djs;
-    json& bwj = djs["BlackWidow"];
+    json djs, &bwj = djs["BlackWidow"];
     ROCKSDB_JSON_SET_PROP(bwj, max_meta_size_ratio);
     ROCKSDB_JSON_SET_PROP(bwj, num_total);
     ROCKSDB_JSON_SET_PROP(bwj, num_target_run_local);
@@ -1221,9 +1216,7 @@ struct BwDcompactExecFactory : CompactionExecutorFactory {
     CompactExecFactoryToJson(target.get(), d, djs, repo);
     return JsonToString(djs, d);
   }
-  bool ShouldRunLocal(const Compaction* c) const {
-    std::shared_ptr<CompactionExecutorFactory> target = m_repo->Get(target_name);
-    TERARK_VERIFY_S(target != nullptr, "target_name = %s is not defined", target_name);
+  bool ShouldRunLocal(const Compaction* c) const override {
     as_atomic(num_total).fetch_add(1, std::memory_order_relaxed);
     if (target->ShouldRunLocal(c)) {
       as_atomic(num_target_run_local).fetch_add(1, std::memory_order_relaxed);
@@ -1251,19 +1244,13 @@ struct BwDcompactExecFactory : CompactionExecutorFactory {
       return false;
     }
   }
-  bool AllowFallbackToLocal() const {
-    std::shared_ptr<CompactionExecutorFactory> target = m_repo->Get(target_name);
-    TERARK_VERIFY_S(target != nullptr, "target_name = %s is not defined", target_name);
+  bool AllowFallbackToLocal() const override {
     return target->AllowFallbackToLocal();
   }
-  CompactionExecutor* NewExecutor(const Compaction* c) const {
-    std::shared_ptr<CompactionExecutorFactory> target = m_repo->Get(target_name);
-    TERARK_VERIFY_S(target != nullptr, "target_name = %s is not defined", target_name);
+  CompactionExecutor* NewExecutor(const Compaction* c) const override {
     return target->NewExecutor(c);
   }
-  const char* Name() const {
-    return "BwDcompactExec";
-  }
+  const char* Name() const { return "BwDcompactExec"; }
 };
 ROCKSDB_REG_Plugin("BwDcompactExec", BwDcompactExecFactory, CompactionExecutorFactory);
 ROCKSDB_REG_EasyProxyManip("BwDcompactExec", BwDcompactExecFactory, CompactionExecutorFactory);
