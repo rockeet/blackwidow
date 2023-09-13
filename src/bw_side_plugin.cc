@@ -1234,8 +1234,10 @@ struct BwDcompactExecFactory : CompactionExecutorFactory {
     TERARK_VERIFY(g_data_to_meta_cf.end() != iter);
     DB* db = iter->second;
     Range rng(c->GetSmallestUserKey(), c->GetLargestUserKey());
+    auto flags = DB::SizeApproximationFlags::INCLUDE_FILES
+               | DB::SizeApproximationFlags::INCLUDE_MEMTABLES;
     uint64_t meta_size = 0;
-    Status s = db->GetApproximateSizes(&rng, 1, &meta_size); // default cf
+    Status s = db->GetApproximateSizes(&rng, 1, &meta_size, flags); // default cf
     size_t input_size = 0;
     for (auto& lev : *c->inputs()) {
       for (auto& file : lev.files)
