@@ -1226,7 +1226,9 @@ struct BwDcompactExecFactory : CompactionExecutorFactory {
     auto iter = g_data_to_meta_cf.find(data_cfd);
     TERARK_VERIFY(g_data_to_meta_cf.end() != iter);
     DB* db = iter->second;
-    Range rng(c->GetSmallestUserKey(), c->GetLargestUserKey());
+    const std::string start = decode_01_00(c->GetSmallestUserKey());
+    const std::string limit = decode_01_00(c->GetLargestUserKey());
+    const Range rng(start, limit);
     auto flags = DB::SizeApproximationFlags::INCLUDE_FILES
                | DB::SizeApproximationFlags::INCLUDE_MEMTABLES;
     uint64_t meta_size = 0;
