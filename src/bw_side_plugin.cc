@@ -1232,8 +1232,13 @@ struct BwDcompactExecFactory : CompactionExecutorFactory {
     auto flags = DB::SizeApproximationFlags::INCLUDE_FILES
                | DB::SizeApproximationFlags::INCLUDE_MEMTABLES;
     uint64_t meta_size = 0;
+    uint64_t input_size = 0;
     Status s = db->GetApproximateSizes(&rng, 1, &meta_size, flags); // default cf
-    size_t input_size = 0;
+    if (!s.ok()) { // should not fail in real world
+      auto log = c->immutable_options()->info_log;
+      ROCKS_LOG_WARN(log, "GetApproximateSizes() failed, db: %s, cf: %s",
+                     db->GetName().c_str(), data_cfd->GetName().c_str());
+    }
     for (auto& lev : *c->inputs()) {
       for (auto& file : lev.files)
         input_size += file->fd.file_size;
